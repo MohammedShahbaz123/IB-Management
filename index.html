@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BizManager - Inventory & Billing System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/business.css">
+    <link rel="stylesheet" href="css/staff.css">
+    <link rel="stylesheet" href="css/inventory.css">
+    <link rel="stylesheet" href="css/sales.css">
+    <link rel="stylesheet" href="css/notifications.css">
+    
+    <script>
+        // Add your Supabase credentials here
+        const SUPABASE_URL = 'https://lgvbltlxwbpwojjkobbr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmJsdGx4d2Jwd29qamtvYmJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1NjI3ODQsImV4cCI6MjA3NTEzODc4NH0.dXqnS2BAZ1sCxFhB9HEK5a3zfqyh7sozoBCWqhr332E';
+    </script>
+</head>
+<body>
+    <!-- Initial Loading Screen -->
+    <div id="app-loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading BizManager...</div>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notification-container" class="notification-container"></div>
+    
+    <!-- Landing Page -->
+    <div id="landing-page">
+        <header>
+            <div class="container">
+                <nav class="navbar">
+                    <a href="#" class="logo">
+                        <i class="fas fa-cubes"></i> BizManager
+                    </a>
+                    <ul class="nav-links">
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                    <div class="auth-buttons">
+                        <a href="#" class="btn btn-outline" id="login-btn">Login</a>
+                        <a href="#" class="btn btn-primary" id="signup-btn">Start Free Trial</a>
+                    </div>
+                    <button class="mobile-menu-btn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="container">
+                <h1>Simplify Your Business Operations</h1>
+                <p>Manage inventory, track expenses, and handle billing all in one place. Streamline your business with our powerful yet easy-to-use platform.</p>
+                <div class="hero-buttons">
+                    <a href="#" class="btn btn-primary" id="hero-signup">Start Free Trial</a>
+                    <a href="#" class="btn btn-outline">Watch Demo</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="section">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Powerful Features</h2>
+                    <p>Everything you need to manage your business efficiently</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <h3>Inventory Management</h3>
+                        <p>Track stock levels, manage suppliers, and automate reordering with our intelligent inventory system.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <h3>Billing & Invoicing</h3>
+                        <p>Create professional invoices, track payments, and manage customer accounts with ease.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h3>Expense Tracking</h3>
+                        <p>Monitor business expenses, categorize spending, and generate detailed financial reports.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <h3>Multi-Staff Management</h3>
+                        <p>Assign roles and permissions to staff members with different access levels and authorities.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <h3>GST & Tax Calculation</h3>
+                        <p>Automatically calculate GST and other taxes with support for multiple tax regimes.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-wifi"></i>
+                        </div>
+                        <h3>Offline Capability</h3>
+                        <p>Continue working even without internet connection. Data syncs when you're back online.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pricing" class="section" style="background: #f8f9fa;">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Simple, Transparent Pricing</h2>
+                    <p>Choose the plan that works best for your business</p>
+                </div>
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <h3>Starter</h3>
+                        <div class="price">$0<span>/month</span></div>
+                        <p>Perfect for small businesses just getting started</p>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> Up to 100 products</li>
+                            <li><i class="fas fa-check"></i> Basic inventory tracking</li>
+                            <li><i class="fas fa-check"></i> 1 staff account</li>
+                            <li><i class="fas fa-check"></i> Email support</li>
+                        </ul>
+                        <a href="#" class="btn btn-outline">Get Started</a>
+                    </div>
+                    <div class="pricing-card popular">
+                        <div class="popular-badge">Most Popular</div>
+                        <h3>Professional</h3>
+                        <div class="price">$29<span>/month</span></div>
+                        <p>Ideal for growing businesses with multiple staff</p>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> Unlimited products</li>
+                            <li><i class="fas fa-check"></i> Advanced inventory</li>
+                            <li><i class="fas fa-check"></i> Up to 5 staff accounts</li>
+                            <li><i class="fas fa-check"></i> GST/tax calculation</li>
+                            <li><i class="fas fa-check"></i> Priority support</li>
+                        </ul>
+                        <a href="#" class="btn btn-primary">Start Free Trial</a>
+                    </div>
+                    <div class="pricing-card">
+                        <h3>Enterprise</h3>
+                        <div class="price">$79<span>/month</span></div>
+                        <p>For large businesses with complex needs</p>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> Everything in Professional</li>
+                            <li><i class="fas fa-check"></i> Unlimited staff accounts</li>
+                            <li><i class="fas fa-check"></i> Advanced analytics</li>
+                            <li><i class="fas fa-check"></i> Custom integrations</li>
+                            <li><i class="fas fa-check"></i> Dedicated account manager</li>
+                        </ul>
+                        <a href="#" class="btn btn-outline">Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Authentication Pages -->
+    <div id="auth-pages" class="d-none">
+        <!-- Signup Page -->
+        <div id="signup-page" class="auth-container">
+            <div class="auth-card">
+                <div class="auth-title">
+                    <h2>Create Your Account</h2>
+                    <p>Start your 14-day free trial. No credit card required.</p>
+                </div>
+                <form id="signup-form">
+                    <div class="form-group">
+                        <label for="signup-email">Business Email</label>
+                        <input type="email" id="signup-email" class="form-control" placeholder="your@business.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="business-name">Business Name</label>
+                        <input type="text" id="business-name" class="form-control" placeholder="Your Business Name" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" id="signup-submit">
+                        <span id="signup-text">Continue</span>
+                        <div id="signup-loading" class="d-none">
+                            <i class="fas fa-spinner fa-spin"></i> Sending OTP...
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-block mt-2" id="signup-cancel">
+                        <i class="fas fa-arrow-left"></i> Cancel
+                    </button>
+                </form>
+                <div class="auth-footer">
+                    <p>Already have an account? <a href="#" id="to-login">Sign In</a></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Page -->
+        <div id="login-page" class="auth-container d-none">
+            <div class="auth-card">
+                <div class="auth-title">
+                    <h2>Welcome Back</h2>
+                    <p>Sign in to your account</p>
+                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email Address</label>
+                        <input type="email" id="login-email" class="form-control" placeholder="your@email.com" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" id="login-submit">
+                        <span id="login-text">Continue</span>
+                        <div id="login-loading" class="d-none">
+                            <i class="fas fa-spinner fa-spin"></i> Sending OTP...
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-block mt-2" id="login-cancel">
+                        <i class="fas fa-arrow-left"></i> Cancel
+                    </button>
+                </form>
+                <div class="auth-footer">
+                    <p>Don't have an account? <a href="#" id="to-signup">Sign Up</a></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- OTP Verification Page -->
+        <div id="otp-page" class="auth-container d-none">
+            <div class="auth-card">
+                <div class="auth-title">
+                    <h2>Verify Your Email</h2>
+                    <p>We've sent a 6-digit code to <span id="user-email">your@email.com</span></p>
+                    <p class="text-small">Check your spam folder if you don't see it in your inbox</p>
+                </div>
+                <form id="otp-form">
+                    <div class="form-group">
+                        <label for="otp-code">Enter Verification Code</label>
+                        <input type="text" id="otp-code" class="form-control" placeholder="123456" maxlength="6" required>
+                        <div class="form-hint">Enter the 6-digit code sent to your email</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" id="otp-submit">
+                        <span id="otp-text">Verify & Continue</span>
+                        <div id="otp-loading" class="d-none">
+                            <i class="fas fa-spinner fa-spin"></i> Verifying...
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-block mt-2" id="otp-cancel">
+                        <i class="fas fa-arrow-left"></i> Cancel
+                    </button>
+                </form>
+                <div class="auth-footer">
+                    <p>Didn't receive the code? <a href="#" id="resend-otp">Resend</a></p>
+                    <p id="resend-timer" class="d-none">Resend available in <span id="countdown">60</span> seconds</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Setup Page -->
+        <div id="profile-page" class="auth-container d-none">
+            <div class="auth-card">
+                <div class="auth-title">
+                    <h2>Complete Your Profile</h2>
+                    <p>Set up your account to get started</p>
+                </div>
+                <form id="profile-form">
+                    <div class="form-group">
+                        <label for="full-name">Your Full Name *</label>
+                        <input type="text" id="full-name" class="form-control" placeholder="John Doe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" class="form-control" placeholder="+1 (555) 123-4567">
+                    </div>
+                    
+                    <div class="business-section">
+                        <h3><i class="fas fa-building"></i> Business Information</h3>
+                        
+                        <div class="form-group">
+                            <label for="profile-business-name">Business Name *</label>
+                            <input type="text" id="profile-business-name" class="form-control" placeholder="Your Business Name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="business-type">Business Type *</label>
+                            <select id="business-type" class="form-control" required>
+                                <option value="">Select Business Type</option>
+                                <option value="retail">Retail Store</option>
+                                <option value="wholesale">Wholesale</option>
+                                <option value="manufacturing">Manufacturing</option>
+                                <option value="ecommerce">E-commerce</option>
+                                <option value="service">Service Provider</option>
+                                <option value="restaurant">Restaurant/Food</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="profile-submit">
+                        <span id="profile-text">Complete Setup</span>
+                        <div id="profile-loading" class="d-none">
+                            <i class="fas fa-spinner fa-spin"></i> Setting up...
+                        </div>
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline btn-block mt-2" id="profile-cancel">
+                        <i class="fas fa-arrow-left"></i> Cancel
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard d-none">
+        <div class="sidebar">
+            <!-- Business Selector -->
+            <div class="business-selector-container">
+                <div>
+                    <label for="navbar-business-select">
+                        <i class="fas fa-store"></i> Active Business
+                    </label>
+                    <select id="navbar-business-select" class="form-control">
+                        <option value="">Loading businesses...</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-outline btn-sm" onclick="showCreateBusinessModal()">
+                        <i class="fas fa-plus"></i> New Business
+                    </button>
+                </div>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li><a href="#" class="active" data-page="overview"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
+                <li><a href="#" data-page="inventory"><i class="fas fa-boxes"></i> <span>Inventory</span></a></li>
+                <li><a href="#" data-page="parties"><i class="fas fa-users"></i> <span>Parties</span></a></li>
+                <li><a href="#" data-page="sales"><i class="fas fa-shopping-cart"></i> <span>Sales</span></a></li>
+                <li><a href="#" data-page="purchases"><i class="fas fa-truck"></i> <span>Purchases</span></a></li>
+                <li><a href="#" data-page="expenses"><i class="fas fa-money-bill-wave"></i> <span>Expenses</span></a></li>
+                <li><a href="#" data-page="reports"><i class="fas fa-chart-bar"></i> <span>Reports</span></a></li>
+                <li><a href="#" data-page="businesses"><i class="fas fa-building"></i> <span>Business Management</span></a></li>    
+                <li><a href="#" data-page="staff"><i class="fas fa-user-shield"></i> <span>Staff Management</span></a></li>
+                <li><a href="#" data-page="settings"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+                <li><a href="#" id="logout-btn"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
+            </ul>
+        </div>
+
+        <div class="main-content">
+            <!-- Dashboard Overview -->
+            <div id="overview-page" class="page-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h1>Business Intelligence Dashboard</h1>
+                        <p>Active: <span id="current-business-name" class="badge badge-success">Loading...</span></p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="quickSale()"><i class="fas fa-plus"></i> Quick Sale</button>
+                        <button class="btn btn-outline" onclick="exportData('overview')"><i class="fas fa-download"></i> Export</button>
+                    </div>
+                </div>
+
+                <!-- Business Health Alerts -->
+                <div id="business-alerts" class="content-card status-warning" style="display: none;">
+                    <div class="card-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Attention Required</h3>
+                    </div>
+                    <div id="alert-content"></div>
+                </div>
+
+                <!-- Enhanced Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
+                        <div class="stat-icon" style="background: var(--primary);">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="today-sales">0</h3>
+                            <p>Today's Sales</p>
+                            <small id="sales-change" class="financial-positive">+0%</small>
+                        </div>
+                    </div>
+                    <div class="stat-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
+                        <div class="stat-icon" style="background: var(--success);">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="today-revenue">$0</h3>
+                            <p>Today's Revenue</p>
+                            <small id="revenue-change" class="financial-positive">+0%</small>
+                        </div>
+                    </div>
+                    <div class="stat-card" onclick="showDashboardPage('inventory')" style="cursor: pointer;">
+                        <div class="stat-icon" style="background: var(--warning);">
+                            <i class="fas fa-box-open"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="low-stock-count">0</h3>
+                            <p>Low Stock Items</p>
+                            <small>Needs attention</small>
+                        </div>
+                    </div>
+                    <div class="stat-card" onclick="showDashboardPage('purchases')" style="cursor: pointer;">
+                        <div class="stat-icon" style="background: var(--danger);">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="pending-orders">0</h3>
+                            <p>Pending Orders</p>
+                            <small>Action required</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Summary -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Financial Summary</h2>
+                        <div class="header-actions">
+                            <select id="period-select" onchange="loadFinancialSummary()" class="form-control" style="width: auto; display: inline-block;">
+                                <option value="today">Today</option>
+                                <option value="week">This Week</option>
+                                <option value="month" selected>This Month</option>
+                                <option value="quarter">This Quarter</option>
+                                <option value="year">This Year</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                        <div class="text-center">
+                            <h4 id="total-revenue" class="financial-positive">$0.00</h4>
+                            <p>Total Revenue</p>
+                        </div>
+                        <div class="text-center">
+                            <h4 id="total-expenses" class="financial-negative">$0.00</h4>
+                            <p>Total Expenses</p>
+                        </div>
+                        <div class="text-center">
+                            <h4 id="net-profit" class="financial-positive">$0.00</h4>
+                            <p>Net Profit</p>
+                        </div>
+                        <div class="text-center">
+                            <h4 id="profit-margin">0%</h4>
+                            <p>Profit Margin</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Performance Analytics</h2>
+                        <div class="header-actions">
+                            <select id="chart-period" onchange="loadCharts()" class="form-control">
+                                <option value="7">Last 7 Days</option>
+                                <option value="30" selected>Last 30 Days</option>
+                                <option value="90">Last 90 Days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity & Alerts -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Recent Activity & Alerts</h2>
+                        <button class="btn btn-outline btn-sm" onclick="loadRecentActivity()"><i class="fas fa-refresh"></i> Refresh</button>
+                    </div>
+                    <div id="recent-activity">
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-title">New Sale Created</div>
+                                <div class="activity-description">Sale #INV-001 for $250.00</div>
+                                <div class="activity-time">2 hours ago</div>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-title">Low Stock Alert</div>
+                                <div class="activity-description">Product "Wireless Mouse" is running low</div>
+                                <div class="activity-time">5 hours ago</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Inventory Management -->
+            <div id="inventory-page" class="page-content d-none">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h1>Inventory Management</h1>
+                        <p>Manage stock levels, suppliers, and product information</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showAddProductModal()"><i class="fas fa-plus"></i> Add Product</button>
+                        <button class="btn btn-outline" onclick="exportData('inventory')"><i class="fas fa-download"></i> Export</button>
+                        <button class="btn btn-outline" onclick="showBulkUpdateModal()"><i class="fas fa-edit"></i> Bulk Update</button>
+                        <button class="btn btn-outline" onclick="showImportModal()"><i class="fas fa-upload"></i> Import</button>
+                    </div>
+                </div>
+                
+                <!-- Inventory Summary -->
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 1.5rem;">
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="total-products">0</h4>
+                            <p>Total Products</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="total-stock-value">$0</h4>
+                            <p>Stock Value</p>
+                        </div>
+                    </div>
+                    <div class="stat-card status-warning">
+                        <div class="stat-info">
+                            <h4 id="out-of-stock-count">0</h4>
+                            <p>Out of Stock</p>
+                        </div>
+                    </div>
+                    <div class="stat-card status-critical">
+                        <div class="stat-info">
+                            <h4 id="critical-stock-count">0</h4>
+                            <p>Critical Stock</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inventory Controls -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Product Inventory</h2>
+                        <div class="header-actions">
+                            <input type="text" id="inventory-search" class="form-control" placeholder="Search products..." style="width: 200px;">
+                            <select id="category-filter" class="form-control" style="width: 150px;">
+                                <option value="">All Categories</option>
+                            </select>
+                            <select id="stock-status-filter" class="form-control" style="width: 150px;">
+                                <option value="">All Stock</option>
+                                <option value="out_of_stock">Out of Stock</option>
+                                <option value="low_stock">Low Stock</option>
+                                <option value="in_stock">In Stock</option>
+                            </select>
+                            <button class="btn btn-outline" onclick="refreshInventory()"><i class="fas fa-refresh"></i></button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-grid">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>SKU</th>
+                                    <th>Category</th>
+                                    <th>Current Stock</th>
+                                    <th>Reorder Level</th>
+                                    <th>Cost Price</th>
+                                    <th>Selling Price</th>
+                                    <th>Stock Value</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-2">
+                        <div id="inventory-pagination"></div>
+                    </div>
+                </div>
+
+                <!-- Low Stock Alerts -->
+                <div class="content-card status-warning">
+                    <div class="card-header">
+                        <h2><i class="fas fa-exclamation-triangle"></i> Low Stock Alerts</h2>
+                        <button class="btn btn-outline btn-sm" onclick="generatePurchaseOrder()"><i class="fas fa-clipboard-list"></i> Generate PO</button>
+                    </div>
+                    <div id="low-stock-alerts">
+                        <!-- Dynamic low stock products -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Sales Management -->
+            <div id="sales-page" class="page-content d-none">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h1>Sales Management</h1>
+                        <p>Manage sales, invoices, and customer orders</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="createNewSale()"><i class="fas fa-plus"></i> New Sale</button>
+                        <button class="btn btn-outline" onclick="exportData('sales')"><i class="fas fa-download"></i> Export</button>
+                        <button class="btn btn-outline" onclick="showSalesReport()"><i class="fas fa-chart-bar"></i> Reports</button>
+                    </div>
+                </div>
+
+                <!-- Sales Summary -->
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="total-sales-count">0</h4>
+                            <p>Total Sales</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="total-sales-amount">$0</h4>
+                            <p>Sales Amount</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="pending-invoices">0</h4>
+                            <p>Pending Invoices</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h4 id="avg-sale-value">$0</h4>
+                            <p>Avg Sale Value</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sales List -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Recent Sales</h2>
+                        <div class="header-actions">
+                            <input type="text" id="sales-search" class="form-control" placeholder="Search sales..." style="width: 200px;">
+                            <select id="sales-status-filter" class="form-control" style="width: 150px;">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-grid">
+                            <thead>
+                                <tr>
+                                    <th>Invoice No</th>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Items</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-table-body">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Management Page -->
+            <div id="businesses-page" class="page-content d-none">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h1>Business Management</h1>
+                        <p>Manage your businesses and switch between them</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showCreateBusinessModal()">
+                            <i class="fas fa-plus"></i> Create New Business
+                        </button>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Your Businesses <span id="business-count" class="badge badge-primary">0 businesses</span></h2>
+                    </div>
+                    <div id="businesses-list">
+                        <div id="no-businesses-message" class="text-center" style="padding: 3rem; color: #6c757d;">
+                            <i class="fas fa-building" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            <h3>No Businesses Yet</h3>
+                            <p>Create your first business to get started with inventory management, sales tracking, and more.</p>
+                            <button class="btn btn-primary mt-2" onclick="showCreateBusinessModal()">
+                                <i class="fas fa-plus"></i> Create Your First Business
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other pages would go here with similar enhanced features -->
+            <div id="parties-page" class="page-content d-none">
+                <!-- Parties management content -->
+            </div>
+
+            <div id="purchases-page" class="page-content d-none">
+                <!-- Purchases management content -->
+            </div>
+
+            <div id="expenses-page" class="page-content d-none">
+                <!-- Expenses management content -->
+            </div>
+
+            <div id="reports-page" class="page-content d-none">
+                <!-- Reports content -->
+            </div>
+
+            <!-- Staff Management Section -->
+<div id="staff-page" class="page-content d-none">
+    <div class="page-header">
+        <h2>Staff Management</h2>
+        <button id="add-staff-btn" class="btn btn-primary" onclick="showAddStaffModal()">
+            <i class="fas fa-plus"></i> Add Staff
+        </button>
+    </div>
+
+    <!-- Staff Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="total-staff">0</div>
+            <div class="stat-label">Total Staff</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="active-staff">0</div>
+            <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="admin-count">0</div>
+            <div class="stat-label">Admins</div>
+        </div>
+    </div>
+
+    <!-- Staff Filters -->
+    <div class="filters-section">
+        <div class="search-box">
+            <input type="text" id="staff-search" placeholder="Search staff..." class="form-control">
+        </div>
+        <div class="filter-controls">
+            <select id="role-filter" class="form-control">
+                <option value="">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="staff">Staff</option>
+                <option value="viewer">Viewer</option>
+            </select>
+            <select id="status-filter" class="form-control">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Staff Table -->
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Last Active</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="staff-table-body">
+                <!-- Staff rows will be populated here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Role Permissions Reference -->
+<div class="role-permissions-reference">
+    <div class="section-header">
+        <h3><i class="fas fa-shield-alt"></i> Role Permissions Reference</h3>
+        <p>Overview of what each role can access in your business</p>
+    </div>
+    
+    <div class="permissions-grid" id="role-permissions-grid">
+        <!-- Dynamic content will be populated by JavaScript -->
+    </div>
+</div>
+
+</div>
+
+<!-- Add Staff Modal -->
+<div id="add-staff-modal" class="modal-overlay d-none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Staff Member</h3>
+            <button type="button" class="close-btn" onclick="hideAddStaffModal()">&times;</button>
+        </div>
+        <form id="add-staff-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="staff-name">Full Name *</label>
+                    <input type="text" id="staff-name" class="form-control" required 
+                           placeholder="Enter staff member's full name">
+                    <small class="form-hint">This will be displayed in the staff list</small>
+                </div>
+                <div class="form-group">
+                    <label for="staff-email">Email Address *</label>
+                    <input type="email" id="staff-email" class="form-control" required 
+                           placeholder="Enter staff member's email">
+                    <small class="form-hint">They will use this email to login with OTP</small>
+                </div>
+                <div class="form-group">
+                    <label for="staff-role">Role *</label>
+                    <select id="staff-role" class="form-control" required>
+                        <option value="">Select Role</option>
+                        <option value="admin">Administrator</option>
+                        <option value="manager">Manager</option>
+                        <option value="salesman">Sales Manager</option>
+                        <option value="inventory_manager">Inventory Manager</option>
+                        <option value="accountant">Accountant</option>
+                        <option value="staff">Staff</option>
+                        <option value="cashier">Cashier</option>
+                        <option value="viewer">Viewer</option>
+                    </select>
+                    <small class="form-hint">Choose appropriate permissions for this staff member</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="hideAddStaffModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Staff Member</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+            <div id="settings-page" class="page-content d-none">
+                <!-- Settings content -->
+            </div>
+        </div>
+    </div>
+
+    <div id="create-business-modal" class="modal d-none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Create New Business</h3>
+            <button class="btn btn-outline btn-sm" onclick="hideCreateBusinessModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="create-business-form">
+            <div class="form-group">
+                <label for="new-business-name">Business Name *</label>
+                <input type="text" id="new-business-name" class="form-control" placeholder="Enter business name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="new-business-type">Business Type *</label>
+                <select id="new-business-type" class="form-control" required>
+                    <option value="">Select Business Type</option>
+                    <option value="retail">Retail Store</option>
+                    <option value="wholesale">Wholesale</option>
+                    <option value="manufacturing">Manufacturing</option>
+                    <option value="ecommerce">E-commerce</option>
+                    <option value="service">Service Provider</option>
+                    <option value="restaurant">Restaurant/Food</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="new-business-currency">Default Currency *</label>
+                <select id="new-business-currency" class="form-control" required>
+                    <option value="USD">US Dollar ($)</option>
+                    <option value="INR" selected>Indian Rupee (₹)</option>
+                    <option value="EUR">Euro (€)</option>
+                    <option value="GBP">British Pound (£)</option>
+                    <option value="CAD">Canadian Dollar (C$)</option>
+                </select>
+            </div>
+
+            <!-- Optional fields that exist in your database -->
+            <div class="form-group">
+                <label for="new-business-phone">Phone Number</label>
+                <input type="tel" id="new-business-phone" class="form-control" placeholder="Business phone number">
+            </div>
+
+            <div class="form-group">
+                <label for="new-business-email">Email</label>
+                <input type="email" id="new-business-email" class="form-control" placeholder="Business email">
+            </div>
+
+            <div class="form-group">
+                <label for="new-business-address">Address</label>
+                <textarea id="new-business-address" class="form-control" placeholder="Business address" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="new-gst-number">GST Number</label>
+                <input type="text" id="new-gst-number" class="form-control" placeholder="GSTIN number">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-outline" onclick="hideCreateBusinessModal()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    Create Business
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <!-- Add Product Modal -->
+    <div id="add-product-modal" class="modal d-none">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Add New Product</h3>
+                <button class="btn btn-outline btn-sm" onclick="hideAddProductModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="add-product-form">
+                <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                        <label for="product-name">Product Name *</label>
+                        <input type="text" id="product-name" class="form-control" placeholder="Enter product name" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-sku">SKU *</label>
+                        <input type="text" id="product-sku" class="form-control" placeholder="SKU" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-category">Category</label>
+                        <select id="product-category" class="form-control">
+                            <option value="">Select Category</option>
+                            <option value="electronics">Electronics</option>
+                            <option value="clothing">Clothing</option>
+                            <option value="food">Food & Beverages</option>
+                            <option value="office">Office Supplies</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-unit">Unit</label>
+                        <input type="text" id="product-unit" class="form-control" placeholder="e.g., pcs, kg, liters">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-cost">Cost Price *</label>
+                        <input type="number" id="product-cost" class="form-control" placeholder="0.00" step="0.01" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-price">Selling Price *</label>
+                        <input type="number" id="product-price" class="form-control" placeholder="0.00" step="0.01" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-stock">Initial Stock *</label>
+                        <input type="number" id="product-stock" class="form-control" placeholder="0" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="product-reorder">Reorder Level</label>
+                        <input type="number" id="product-reorder" class="form-control" placeholder="10" value="10">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="product-description">Description</label>
+                    <textarea id="product-description" class="form-control" placeholder="Product description" rows="3"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="hideAddProductModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Add Product
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/business.js"></script>
+    <script src="js/staff.js"></script>
+    <script src="js/inventory.js"></script>
+    <script src="js/sales.js"></script>
+    <script src="js/notifications.js"></script>
+
+    <script>
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded - initializing app');
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
