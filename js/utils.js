@@ -1,11 +1,11 @@
 // Enhanced Utils with Business Isolation Support
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// State management
+// Add these constants at the top of your file if not already present
 const STATE_KEYS = {
-    CURRENT_PAGE: 'bizmanager_current_page',
-    ACTIVE_DASHBOARD_PAGE: 'bizmanager_active_dashboard_page',
-    LAST_VISIBLE_SECTION: 'bizmanager_last_visible_section'
+    ACTIVE_DASHBOARD_PAGE: 'activeDashboardPage',
+    USER_BUSINESSES: 'userBusinesses',
+    ACTIVE_BUSINESS: 'activeBusiness'
 };
 
 // Global variables
@@ -134,19 +134,50 @@ function createNotificationContainer() {
     return container;
 }
 
-// Utility Functions
+// State persistence functions
+function saveAppState() {
+    const state = {
+        currentPage: currentPage,
+        currentBusiness: currentBusiness?.id,
+        userBusinesses: userBusinesses.map(b => b.id),
+        lastUpdate: new Date().toISOString()
+    };
+    
+    sessionStorage.setItem('appState', JSON.stringify(state));
+    console.log('💾 App state saved:', state);
+}
+
+function loadAppState() {
+    try {
+        const state = JSON.parse(sessionStorage.getItem('appState') || '{}');
+        
+        if (state.currentPage && Date.now() - new Date(state.lastUpdate).getTime() < 300000) { // 5 minutes
+            console.log('📋 Loaded app state:', state);
+            return state;
+        }
+    } catch (error) {
+        console.error('❌ Error loading app state:', error);
+    }
+    
+    return null;
+}
+
+function clearAppState() {
+    sessionStorage.removeItem('appState');
+    sessionStorage.removeItem('currentPage');
+}
+
+// Enhanced safeShow/safeHide with state tracking
 function safeShow(element) {
     if (element) {
-        if (!document.body.classList.contains('app-loaded')) {
-            document.body.classList.add('app-loaded');
-        }
-        
         element.classList.remove('d-none');
         element.style.display = 'block';
-        element.style.visibility = 'visible';
-        element.style.opacity = '1';
         
-        element.offsetHeight; // Force reflow
+        // Track which sections are visible
+        if (element.id === 'dashboard') {
+            sessionStorage.setItem('activeSection', 'dashboard');
+        }
+        
         console.log('👀 Showing element:', element.id);
     }
 }
@@ -201,12 +232,35 @@ function waitForDOMReady() {
     });
 }
 
-function formatCurrency(amount, currency = currentBusiness.currency) {
+function formatCurrency(amount, currency = null) {
     if (!amount || isNaN(amount)) amount = 0;
-    return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: currency
-    }).format(amount);
+    
+    // Use provided currency, or current business currency, or default to INR
+    const targetCurrency = currency || (currentBusiness?.currency) || 'INR';
+    
+    console.log('💰 Formatting:', {
+        amount,
+        targetCurrency,
+        businessCurrency: currentBusiness?.currency
+    });
+    
+    try {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: targetCurrency
+        }).format(amount);
+    } catch (error) {
+        console.error('❌ Currency formatting error:', error);
+        // Fallback to simple formatting
+        const symbols = {
+            'INR': '₹',
+            'USD': '$',
+            'EUR': '€',
+            'GBP': '£'
+        };
+        const symbol = symbols[targetCurrency] || '₹';
+        return `${symbol}${amount.toFixed(2)}`;
+    }
 }
 
 function getPeriodStart(period) {
@@ -423,14 +477,33 @@ function canAccessPage(page) {
     return hasPermission(page, requiredPermission[0]);
 }
 
+// Add these to your utils.js if they don't exist
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Make functions globally available
 window.showNotification = showNotification;
 window.formatCurrency = formatCurrency;
 window.isValidEmail = isValidEmail;
-window.initializeOverviewPage = initializeOverviewPage;
-window.initializeSalesPage = initializeSalesPage;
-window.initializeInventoryPage = initializeInventoryPage;
-window.initializeStaffPage = initializeStaffPage;
 
 // Enhanced business intelligence loading
 async function loadBusinessIntelligence() {

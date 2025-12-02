@@ -23,19 +23,34 @@ function clearBusinessData(key) {
     localStorage.removeItem(businessKey);
 }
 
-function clearAllBusinessData(businessId) {
-    if (!businessId || !currentUser) return;
+function clearAllBusinessData(businessId = 'all') {
+    console.log('🧹 Clearing business data for:', businessId);
     
-    const keysToClear = [
-        'inventory', 'products', 'sales', 'customers', 'suppliers',
-        'financial_summary', 'inventory_summary', 'analytics',
-        'recent_activity', 'low_stock_alerts', 'staff_members'
-    ];
+    // Clear all business-specific data
+    const prefixes = ['business', 'inventory', 'sales', 'products', 'customers', 'staff', 'financial', 'analytics'];
     
-    keysToClear.forEach(key => {
-        const businessKey = `${currentUser.id}_${businessId}_${key}`;
-        localStorage.removeItem(businessKey);
-    });
+    if (businessId === 'all') {
+        // Clear everything
+        localStorage.clear();
+        sessionStorage.clear();
+    } else {
+        // Clear specific business data
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+                key.includes(businessId) ||
+                prefixes.some(prefix => key.includes(prefix))
+            )) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            console.log('🗑️ Removed business data:', key);
+        });
+    }
 }
 
 // User-specific storage functions
@@ -61,11 +76,51 @@ function clearUserData(key) {
 }
 
 function clearAllUserData() {
+    console.log('🧹 Clearing all user data...');
+    
     if (currentUser) {
-        const keys = ['activeBusiness', 'userBusinesses'];
-        keys.forEach(key => clearUserData(key));
+        const userId = currentUser.id;
+        const keysToRemove = [];
+        
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.includes(userId)) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            console.log('🗑️ Removed user data:', key);
+        });
     }
-    localStorage.removeItem('currentUserId');
+    
+    // Clear user-related global variables
+    userBusinesses = [];
+    userRoles = {};
+}
+
+// Reset business management state
+function resetBusinessManagement() {
+    console.log('🔄 Resetting business management state...');
+    
+    // Clear business list
+    const businessesList = document.getElementById('businesses-list');
+    if (businessesList) {
+        businessesList.innerHTML = '';
+    }
+    
+    // Reset business selector
+    const businessSelect = document.getElementById('navbar-business-select');
+    if (businessSelect) {
+        businessSelect.innerHTML = '<option value="">No businesses</option>';
+    }
+    
+    // Reset current business display
+    const currentBusinessName = document.getElementById('current-business-name');
+    if (currentBusinessName) {
+        currentBusinessName.textContent = 'No Business Selected';
+    }
 }
 
 // Business-aware data operations
@@ -385,55 +440,47 @@ async function loadUserBusinesses() {
             console.error('❌ Error loading owned businesses:', ownedError);
         }
 
-        // 🔥 CRITICAL FIX: Get staff businesses by BOTH user_id AND email
+        // 🔥 FIX: Use simpler query for staff roles to avoid relationship issues
         let staffBusinesses = [];
         
-        // Try by user_id first (for staff who have completed profile)
-        const { data: staffRolesByUserId, error: staffErrorByUserId } = await supabase
-            .from('staff_roles')
-            .select(`
-                id, business_id, role, staff_name, email, is_active,
-                businesses!inner(*)
-            `)
-            .eq('owner_id', currentUser.id)
-            .eq('is_active', true)
-            .eq('businesses.is_active', true);
+        try {
+            // Get staff roles by email (without complex join)
+            const { data: staffRolesByEmail, error: staffErrorByEmail } = await supabase
+                .from('staff_roles')
+                .select('id, business_id, role, staff_name, email, owner_id, is_active')
+                .eq('email', currentUser.email)
+                .eq('is_active', true);
 
-        console.log('📋 Staff roles found by user_id:', staffRolesByUserId);
+            console.log('📋 Staff roles found by email:', staffRolesByEmail);
 
-        // Try by email as fallback (for staff who haven't completed profile)
-        const { data: staffRolesByEmail, error: staffErrorByEmail } = await supabase
-            .from('staff_roles')
-            .select(`
-                id, business_id, role, staff_name, email, is_active,
-                businesses!inner(*)
-            `)
-            .eq('email', currentUser.email)
-            .eq('is_active', true)
-            .eq('businesses.is_active', true);
+            if (staffRolesByEmail && staffRolesByEmail.length > 0) {
+                // Get business details separately
+                const businessIds = staffRolesByEmail.map(role => role.business_id);
+                const { data: staffBusinessesData, error: businessesError } = await supabase
+                    .from('businesses')
+                    .select('*')
+                    .in('id', businessIds)
+                    .eq('is_active', true);
 
-        console.log('📋 Staff roles found by email:', staffRolesByEmail);
+                if (!businessesError && staffBusinessesData) {
+                    staffBusinesses = staffRolesByEmail.map(role => {
+                        const business = staffBusinessesData.find(b => b.id === role.business_id);
+                        return business ? {
+                            ...business,
+                            access_type: 'staff',
+                            staff_role: role.role,
+                            staff_name: role.staff_name,
+                            staff_email: role.email,
+                            staff_role_id: role.id,
+                            added_by_owner_id: role.owner_id
+                        } : null;
+                    }).filter(business => business !== null);
+                }
+            }
 
-        // Combine both results
-        const allStaffRoles = [
-            ...(staffRolesByUserId || []),
-            ...(staffRolesByEmail || [])
-        ];
-
-        // Remove duplicates by business_id
-        const uniqueStaffRoles = allStaffRoles.filter((role, index, self) => 
-            index === self.findIndex(r => r.business_id === role.business_id)
-        );
-
-        if (uniqueStaffRoles.length > 0) {
-            staffBusinesses = uniqueStaffRoles.map(role => ({
-                ...role.businesses,
-                access_type: 'staff',
-                staff_role: role.role,
-                staff_name: role.staff_name,
-                staff_email: role.email,
-                staff_role_id: role.id
-            }));
+        } catch (schemaError) {
+            console.warn('⚠️ Schema error when loading staff roles:', schemaError);
+            // Continue with owned businesses only
         }
 
         // Combine businesses
@@ -450,7 +497,6 @@ async function loadUserBusinesses() {
         
         // Add staff businesses
         staffBusinesses.forEach(business => {
-            // Avoid duplicates
             if (!allBusinesses.some(b => b.id === business.id)) {
                 allBusinesses.push(business);
             }
@@ -472,7 +518,7 @@ async function loadUserBusinesses() {
             role: b.staff_role || 'owner'
         })));
 
-        // 🔥 CRITICAL: Set active business if none is set
+        // Set active business
         await setActiveBusinessOnLoad();
         updateBusinessesUI();
         updateNavbarBusinessSelector();
@@ -535,11 +581,15 @@ async function loadActiveBusiness() {
 
 async function setActiveBusiness(businessId) {
     try {
-        console.log('🎯 Setting active business with isolation:', businessId);
+        console.log('🎯 Setting active business with full content reload:', businessId);
+        
         const business = userBusinesses.find(b => b.id === businessId);
         if (!business) {
             throw new Error('Business not found in user businesses');
         }
+        
+        // Show loading state for the entire main content
+        showMainContentLoadingState();
         
         // Clear current business cache if switching
         if (currentBusiness && currentBusiness.id !== businessId) {
@@ -555,16 +605,14 @@ async function setActiveBusiness(businessId) {
         console.log('✅ Active business set:', currentBusiness.name, 'Access type:', currentBusiness.access_type);
         
         // Clear all business-specific caches
-        clearBusinessData('financial_summary');
-        clearBusinessData('inventory');
-        clearBusinessData('customers');
-        clearBusinessData('analytics');
-        clearBusinessData('staff_members');
+        clearAllBusinessCaches();
         
         // Update UI immediately
         updateCurrentBusinessUI();
         updateBusinessesUI();
         updateNavbarBusinessSelector();
+        refreshInventory();
+        loadRecentActivityAndAlerts();
         
         // 🔥 CRITICAL: Force reload user role for the new business
         if (window.loadCurrentUserRole) {
@@ -583,52 +631,334 @@ async function setActiveBusiness(businessId) {
             applyRoleBasedAccess();
         }
         
-        // Load fresh data for the new business
-        await loadBusinessIntelligence();
-        
-        // Update realtime subscriptions
-        setupRealtimeSubscriptions();
-        
-        // Reload current page with new business data
-        const currentPage = localStorage.getItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE) || 'overview';
-        await reloadCurrentPage(currentPage);
-        
-        showNotification('Business Switched', `Now viewing ${currentBusiness.name}`, 'success');
+        // 🔥 NEW: Force reload of all main content
+        await reloadAllMainContent();
         
     } catch (error) {
         console.error('❌ Error setting active business:', error);
         showNotification('Error', 'Failed to switch business', 'error');
+        hideMainContentLoadingState();
     }
 }
 
-// 🔥 NEW FUNCTION: Reload current page with fresh data
-async function reloadCurrentPage(page) {
-    console.log('🔄 Reloading page:', page);
+// 🔥 NEW FUNCTION: Show loading state for main content
+function showMainContentLoadingState() {
+    const mainContent = document.querySelector('.main-content');
+    if (!mainContent) return;
     
-    switch (page) {
-        case 'overview':
-            await initializeOverviewPage();
-            break;
-        case 'sales':
-            if (window.initializeSalesPage) {
-                await initializeSalesPage();
-            }
-            break;
-        case 'inventory':
-            if (window.initializeInventoryPage) {
-                await initializeInventoryPage();
-            }
-            break;
-        case 'staff':
-            if (window.initializeStaffManagement) {
-                await initializeStaffManagement();
-            }
-            break;
-        // Add other pages as needed
-        default:
-            // For any page, reload the basic business intelligence
-            await loadBusinessIntelligence();
+    // Create loading overlay
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'business-switch-loading';
+    loadingOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        border-radius: 12px;
+    `;
+    
+    loadingOverlay.innerHTML = `
+        <div style="text-align: center; color: #333;">
+            <i class="fas fa-sync-alt fa-spin" style="font-size: 3rem; margin-bottom: 1rem; color: #007bff;"></i>
+            <h3 style="margin-bottom: 0.5rem;">Switching Business...</h3>
+            <p style="color: #6c757d;">Loading data for the new business</p>
+        </div>
+    `;
+    
+    mainContent.style.position = 'relative';
+    mainContent.appendChild(loadingOverlay);
+}
+
+// 🔥 NEW FUNCTION: Hide loading state
+function hideMainContentLoadingState() {
+    const loadingOverlay = document.getElementById('business-switch-loading');
+    if (loadingOverlay) {
+        loadingOverlay.remove();
     }
+}
+
+// 🔥 NEW FUNCTION: Clear all business caches
+function clearAllBusinessCaches() {
+    console.log('🧹 Clearing all business caches...');
+    
+    const cacheKeys = [
+        'financial_summary',
+        'inventory',
+        'inventory_summary',
+        'low_stock_alerts',
+        'customers',
+        'analytics',
+        'staff_members',
+        'sales_data',
+        'products',
+        'reports',
+        'dashboard_metrics'
+    ];
+    
+    cacheKeys.forEach(key => {
+        clearBusinessData(key);
+    });
+    
+    // Clear any page-specific data
+    if (window.clearPageData) {
+        clearPageData();
+    }
+}
+
+// 🔥 NEW FUNCTION: Reload all main content
+async function reloadAllMainContent() {
+    console.log('🔄 Reloading all main content for new business...');
+    
+    try {
+        // Get current active page
+        const currentPage = localStorage.getItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE) || 'overview';
+        console.log('📄 Current active page:', currentPage);
+        
+        // Force reload business intelligence data
+        if (window.loadBusinessIntelligence) {
+            await loadBusinessIntelligence();
+        } else {
+            console.warn('⚠️ loadBusinessIntelligence not available');
+        }
+        
+        // Update realtime subscriptions (but don't fail if it errors)
+        try {
+            setupRealtimeSubscriptions();
+        } catch (realtimeError) {
+            console.warn('⚠️ Realtime subscriptions failed (non-critical):', realtimeError);
+        }
+        
+        // Reload the current page with fresh data
+        await reloadCurrentPage(currentPage);
+        
+        // Update dashboard metrics
+        if (window.updateDashboardMetrics) {
+            updateDashboardMetrics();
+        }
+        
+        // Hide loading state
+        hideMainContentLoadingState();
+        
+        console.log('✅ All main content reloaded successfully');
+        
+    } catch (error) {
+        console.error('❌ Error reloading main content:', error);
+        hideMainContentLoadingState();
+        
+        // Show user-friendly error message
+        showNotification(
+            'Data Loading Issue', 
+            'Some data may take a moment to load completely. The page is still functional.',
+            'warning',
+            5000
+        );
+    }
+}
+
+// 🔥 ENHANCED FUNCTION: Reload current page with fresh data
+async function reloadCurrentPage(page) {
+    console.log('🔄 Force reloading page:', page);
+    
+    // Clear any existing page data first (with error handling)
+    try {
+        clearPageDataForBusiness();
+    } catch (clearError) {
+        console.warn('⚠️ Error clearing page data:', clearError);
+        // Continue anyway - don't let clearing errors break the reload
+    }
+    
+    try {
+        switch (page) {
+            case 'overview':
+                if (window.initializeOverviewPage) {
+                    await initializeOverviewPage();
+                } else {
+                    console.warn('⚠️ initializeOverviewPage not available');
+                    await loadDefaultOverview();
+                }
+                break;
+                
+            case 'sales':
+                if (window.initializeSalesPage) {
+                    await initializeSalesPage();
+                } else {
+                    console.warn('⚠️ initializeSalesPage not available');
+                    await loadDefaultSales();
+                }
+                break;
+                
+            case 'inventory':
+                if (window.initializeInventoryPage) {
+                    await initializeInventoryPage();
+                } else {
+                    console.warn('⚠️ initializeInventoryPage not available');
+                    await loadDefaultInventory();
+                }
+                break;
+                
+            case 'customers':
+                if (window.initializeCustomersPage) {
+                    await initializeCustomersPage();
+                } else {
+                    console.warn('⚠️ initializeCustomersPage not available');
+                    await loadDefaultCustomers();
+                }
+                break;
+                
+            case 'staff':
+                if (window.initializeStaffManagement) {
+                    await initializeStaffManagement();
+                } else {
+                    console.warn('⚠️ initializeStaffManagement not available');
+                    await loadDefaultStaff();
+                }
+                break;
+                
+            case 'reports':
+                if (window.initializeReportsPage) {
+                    await initializeReportsPage();
+                } else {
+                    console.warn('⚠️ initializeReportsPage not available');
+                    await loadDefaultReports();
+                }
+                break;
+                
+            case 'settings':
+                if (window.initializeSettingsPage) {
+                    await initializeSettingsPage();
+                } else {
+                    console.warn('⚠️ initializeSettingsPage not available');
+                    await loadDefaultSettings();
+                }
+                break;
+                
+            default:
+                console.log('📄 Loading default page data for:', page);
+                // For any page, reload the basic business intelligence
+                if (window.loadBusinessIntelligence) {
+                    await loadBusinessIntelligence();
+                }
+        }
+        
+        console.log('✅ Page reload completed:', page);
+        
+    } catch (pageError) {
+        console.error(`❌ Error reloading page ${page}:`, pageError);
+        
+        // Show error in the page content
+        const pageElement = document.getElementById(`${page}-page`);
+        if (pageElement) {
+            pageElement.innerHTML = `
+                <div class="content-card">
+                    <div class="text-center" style="padding: 3rem; color: #6c757d;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <h3>Loading Error</h3>
+                        <p>There was an error loading the page data. Please try refreshing.</p>
+                        <button class="btn btn-primary mt-2" onclick="reloadCurrentPage('${page}')">
+                            <i class="fas fa-refresh"></i> Try Again
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        throw pageError; // Re-throw to let caller handle it
+    }
+}
+
+// 🔥 NEW FUNCTION: Clear page-specific data
+function clearPageDataForBusiness() {
+    console.log('🧹 Clearing page-specific data for business switch...');
+    
+    // Clear any global page data variables
+    if (window.inventoryData) {
+        window.inventoryData = [];
+    }
+    
+    if (window.salesData) {
+        window.salesData = [];
+    }
+    
+    if (window.customersData) {
+        window.customersData = [];
+    }
+    
+    if (window.staffData) {
+        window.staffData = [];
+    }
+    
+    // Clear any chart instances
+    if (window.salesChart) {
+        window.salesChart.destroy();
+        window.salesChart = null;
+    }
+    
+    if (window.inventoryChart) {
+        window.inventoryChart.destroy();
+        window.inventoryChart = null;
+    }
+    
+    // Clear any table data
+    const tableBodies = document.querySelectorAll('tbody');
+    tableBodies.forEach(tbody => {
+        if (tbody.id && tbody.id.includes('table-body')) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading data...</td></tr>';
+        }
+    });
+}
+
+// 🔥 NEW FUNCTION: Default page loaders (fallbacks)
+async function loadDefaultOverview() {
+    console.log('📊 Loading default overview...');
+    await loadBusinessIntelligence();
+    updateDashboardMetrics();
+}
+
+async function loadDefaultSales() {
+    console.log('💰 Loading default sales...');
+    // Implement basic sales loading
+    const salesContainer = document.getElementById('sales-page');
+    if (salesContainer) {
+        salesContainer.innerHTML = '<div class="text-center p-4">Loading sales data...</div>';
+        // Your sales loading logic here
+    }
+}
+
+async function loadDefaultInventory() {
+    console.log('📦 Loading default inventory...');
+    // Implement basic inventory loading
+    const inventoryContainer = document.getElementById('inventory-page');
+    if (inventoryContainer) {
+        inventoryContainer.innerHTML = '<div class="text-center p-4">Loading inventory data...</div>';
+        // Your inventory loading logic here
+    }
+}
+
+async function loadDefaultCustomers() {
+    console.log('👥 Loading default customers...');
+    // Implement basic customers loading
+}
+
+async function loadDefaultStaff() {
+    console.log('👨‍💼 Loading default staff...');
+    // Implement basic staff loading
+}
+
+async function loadDefaultReports() {
+    console.log('📈 Loading default reports...');
+    // Implement basic reports loading
+}
+
+async function loadDefaultSettings() {
+    console.log('⚙️ Loading default settings...');
+    // Implement basic settings loading
 }
 
 function updateCurrentBusinessUI() {
@@ -791,24 +1121,35 @@ async function createNewBusiness(businessData) {
         
         console.log('✅ Business created:', business);
         
-        // Create owner role
+        // 🔥 CRITICAL FIX: Create owner role in staff_roles table
+        console.log('👑 Creating owner role in staff_roles for business:', business.id);
+        
+        const ownerRoleData = {
+            business_id: business.id,
+            owner_id: currentUser.id, // The business owner
+            email: currentUser.email, // Owner's email
+            staff_name: currentUser.email.split('@')[0], // Default name from email
+            role: 'owner',
+            is_active: true,
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+        
+        console.log('📝 Inserting owner role data:', ownerRoleData);
+        
         const { data: staffRole, error: roleError } = await supabase
             .from('staff_roles')
-            .insert([{
-                business_id: business.id,
-                user_id: currentUser.id,
-                role: 'owner',
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }])
+            .insert([ownerRoleData])
             .select()
             .single();
         
         if (roleError) {
-            console.error('❌ Staff role creation error:', roleError);
+            console.error('❌ Owner role creation error:', roleError);
+            // Don't throw error here - business was created successfully
+            // Just log the error and continue
         } else {
-            console.log('✅ Owner role created:', staffRole);
+            console.log('✅ Owner role created in staff_roles:', staffRole);
         }
         
         return business;
@@ -887,6 +1228,7 @@ function initializeBusinessForms() {
 async function handleCreateBusiness(e) {
     e.preventDefault();
     console.log('🏢 Handling business creation...');
+    isCreatingBusiness = true;
     
     const submitButton = document.querySelector('#create-business-form button[type="submit"]');
     const originalText = submitButton.innerHTML;
@@ -927,20 +1269,49 @@ async function handleCreateBusiness(e) {
         
         const newBusiness = await createNewBusiness(formData);
         
-        // Add to user businesses and set as active
-        userBusinesses.unshift(newBusiness);
+        // 🔥 CRITICAL: Add the new business to userBusinesses with proper access type
+        const businessWithAccess = {
+            ...newBusiness,
+            access_type: 'owner',
+            staff_role: 'owner'
+        };
+        
+        userBusinesses.unshift(businessWithAccess);
         
         // Clear cache and reload to ensure fresh data
         clearUserData('userBusinesses');
+        saveUserData('userBusinesses', userBusinesses);
         
+        // Set the new business as active
         await setActiveBusiness(newBusiness.id);
         
         hideCreateBusinessModal();
         showNotification('Success', `Business "${newBusiness.name}" created!`, 'success');
         
-        // Force refresh all UI components
-        updateBusinessesUI();
-        updateNavbarBusinessSelector();
+        // 🔥 CRITICAL FIX: Force redirect to dashboard after business creation
+        console.log('🔄 Redirecting to dashboard after business creation...');
+        
+        // Wait a moment for the notification to show
+        setTimeout(async () => {
+            await showDashboard();
+            
+            // Force reload all dashboard data
+            if (window.loadDashboardData) {
+                await loadDashboardData();
+            }
+            
+            // Update all UI components
+            updateBusinessesUI();
+            updateNavbarBusinessSelector();
+            
+            // 🔥 IMPORTANT: Reload user role for the new business
+            if (window.loadCurrentUserRole) {
+                await loadCurrentUserRole();
+            }
+            if (window.applyRoleBasedAccess) {
+                applyRoleBasedAccess();
+            }
+        }, 1500);
         
     } catch (error) {
         console.error('❌ Business creation error:', error);
@@ -958,6 +1329,7 @@ async function handleCreateBusiness(e) {
     } finally {
         submitButton.innerHTML = originalText;
         submitButton.disabled = false;
+        isCreatingBusiness = false;
     }
 }
 
@@ -1172,21 +1544,11 @@ function debugBusinessAndRoleStatus() {
         role: b.staff_role
     })));
     
-    // Test database queries
+    // Test database queries with correct schema
     if (currentUser) {
         console.log('🔍 Testing staff role queries...');
         
-        // Test query by user_id
-        supabase
-            .from('staff_roles')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .eq('is_active', true)
-            .then(({ data, error }) => {
-                console.log('📋 Staff roles by user_id:', data, error);
-            });
-            
-        // Test query by email
+        // Test query by email (primary method)
         supabase
             .from('staff_roles')
             .select('*')
@@ -1194,6 +1556,16 @@ function debugBusinessAndRoleStatus() {
             .eq('is_active', true)
             .then(({ data, error }) => {
                 console.log('📋 Staff roles by email:', data, error);
+            });
+            
+        // Test query by owner_id
+        supabase
+            .from('staff_roles')
+            .select('*')
+            .eq('owner_id', currentUser.id)
+            .eq('is_active', true)
+            .then(({ data, error }) => {
+                console.log('📋 Staff roles by owner_id:', data, error);
             });
     }
     console.log('=== END DEBUG ===');

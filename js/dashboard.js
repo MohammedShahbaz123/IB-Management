@@ -1,6 +1,7 @@
 // Enhanced Dashboard Functions with Business Isolation
 let salesChart = null;
 let revenueChart = null;
+let currentPage = 'overview';
 let isNavigating = false;
 
 // 🔥 NEW: Show first accessible page function
@@ -28,85 +29,73 @@ async function showFirstAccessiblePage() {
 }
 
 async function showDashboard() {
-    console.log('📊 Showing dashboard...');
+    console.log('📊 Showing dashboard with page persistence...');
     
     try {
         safeHide(landingPage);
         safeHide(authPages);
         safeShow(dashboard);
-        localStorage.setItem(STATE_KEYS.LAST_VISIBLE_SECTION, 'dashboard');
-        
-        // Update current business name immediately
-        const currentBusinessName = document.getElementById('current-business-name');
-        if (currentBusinessName) {
-            currentBusinessName.textContent = currentBusiness?.name || 'No Business Selected';
-        }
         
         // Initialize business management
         await initializeBusinessManagement();
         
-        // 🔥 CRITICAL: Wait for business data to load and ensure we have a business
+        // Wait for business data
         if ((!currentBusiness || !currentBusiness.id) && userBusinesses.length > 0) {
-            console.log('🔄 Setting first business as active...');
             await setActiveBusiness(userBusinesses[0].id);
         }
         
-        // 🔥 CRITICAL: Load user role for the current business
+        // Load user role
         if (window.loadCurrentUserRole) {
             await loadCurrentUserRole();
         }
         
-        // 🔥 FIX: Ensure role is properly set
-        if (window.ensureUserRole) {
-            ensureUserRole();
-        }
-        
-        console.log('🎯 Final user state:', {
-            email: currentUser?.email,
-            role: currentUser?.role,
-            business: currentBusiness?.name
-        });
-        
-        // Apply role-based access control
+        // Apply role-based access
         if (window.applyRoleBasedAccess) {
             applyRoleBasedAccess();
         }
         
-        // Show first accessible page
-        await showFirstAccessiblePage();
+        // 🔥 CRITICAL: Restore last page instead of always going to overview
+        const pageToShow = restoreLastPage();
+        await showDashboardPage(pageToShow);
         
     } catch (error) {
         console.error('❌ Dashboard initialization error:', error);
-        // Fallback to overview page
+        // Fallback to overview but save the error state
         await showDashboardPage('overview');
     }
 }
 
+// Enhanced navigation that doesn't reset on tab switch
 async function showDashboardPage(page) {
     if (isNavigating) {
         console.log('⚠️ Navigation in progress, skipping...');
         return;
     }
     
-    console.log('📄 Showing dashboard page:', page);
-    
-    // Check if user has permission to access this page
+    // Check permissions first
     if (window.canAccessPage && !canAccessPage(page)) {
         console.warn('🚫 Access denied to page:', page);
         showNotification('Access Denied', 'You do not have permission to access this page.', 'error');
         
-        // Redirect to first accessible page but prevent recursion
-        isNavigating = true;
-        setTimeout(async () => {
-            await showFirstAccessiblePage();
-            isNavigating = false;
-        }, 100);
-        return;
+        // Find first accessible page
+        const accessiblePages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports'];
+        for (const accessiblePage of accessiblePages) {
+            if (canAccessPage(accessiblePage)) {
+                page = accessiblePage;
+                break;
+            }
+        }
     }
     
     isNavigating = true;
     
     try {
+        console.log('📄 Navigating to:', page);
+        
+        // Save current page to session storage
+        sessionStorage.setItem('currentPage', page);
+        currentPage = page;
+        
         // Hide all page contents
         const pageContents = document.querySelectorAll('.page-content');
         pageContents.forEach(content => {
@@ -126,13 +115,6 @@ async function showDashboardPage(page) {
         menuItems.forEach(item => {
             if (item && item.classList) {
                 item.classList.remove('active');
-                // 🔥 FIX: Hide menu items user doesn't have access to
-                const itemPage = item.getAttribute('data-page');
-                if (itemPage && window.canAccessPage && !canAccessPage(itemPage)) {
-                    item.style.display = 'none';
-                } else {
-                    item.style.display = 'flex';
-                }
             }
         });
         
@@ -141,12 +123,12 @@ async function showDashboardPage(page) {
             activeMenuItem.classList.add('active');
         }
         
-        localStorage.setItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE, page);
+        localStorage.setItem('activeDashboardPage', page);
         
-        // Initialize page-specific content
+        // Initialize page-specific content WITHOUT reloading everything
         await initializePageContent(page);
         
-        console.log('✅ Dashboard page shown and initialized:', page);
+        console.log('✅ Dashboard page shown:', page);
         
     } catch (error) {
         console.error('❌ Error showing dashboard page:', error);
@@ -155,37 +137,57 @@ async function showDashboardPage(page) {
     }
 }
 
+// Enhanced page content initialization
 async function initializePageContent(page) {
     try {
         switch (page) {
             case 'overview':
-                await initializeOverviewPage();
+                // Only load fresh data if needed, otherwise use cached
+                await loadDashboardData();
                 break;
             case 'sales':
-                await initializeSalesPage();
-                break;
-            case 'inventory':
-                await initializeInventoryPage();
-                break;
-            case 'staff':
-                await initializeStaffPage();
-                break;
-            case 'customers':
-                if (window.initializeCustomersPage) {
-                    await initializeCustomersPage();
+                if (window.loadSalesSummary) {
+                    await loadSalesSummary();
                 }
                 break;
-            case 'reports':
-                if (window.initializeReportsPage) {
-                    await initializeReportsPage();
+            case 'inventory':
+                if (window.loadInventorySummary) {
+                    await loadInventorySummary();
+                }
+                break;
+            case 'staff':
+                if (window.initializeStaffManagement) {
+                    await initializeStaffManagement();
                 }
                 break;
             default:
-                console.log('⚠️ No specific initialization for page:', page);
+                console.log('ℹ️ No specific initialization for page:', page);
         }
     } catch (error) {
         console.error(`❌ Error initializing page ${page}:`, error);
     }
+}
+
+// Restore last viewed page on app load
+function restoreLastPage() {
+    const savedPage = sessionStorage.getItem('currentPage') || localStorage.getItem('activeDashboardPage') || 'overview';
+    
+    // Check if user has access to the saved page
+    if (window.canAccessPage && !canAccessPage(savedPage)) {
+        // Find first accessible page
+        const accessiblePages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports'];
+        for (const page of accessiblePages) {
+            if (canAccessPage(page)) {
+                currentPage = page;
+                break;
+            }
+        }
+    } else {
+        currentPage = savedPage;
+    }
+    
+    console.log('🔄 Restoring last page:', currentPage);
+    return currentPage;
 }
 
 function updateActiveNavigation(page) {
@@ -202,10 +204,15 @@ function updateActiveNavigation(page) {
 // Overview Page Functions
 async function initializeOverviewPage() {
     console.log('📊 Initializing overview page for business:', currentBusiness?.name);
+    
+    // Show loading state immediately
+    showActivitiesLoadingState();
+    
     await loadDashboardData();
     loadCharts();
-    await loadRecentActivity();
+    await loadRecentActivityAndAlerts(); // Use new function
     updateDashboardMetrics();
+    setupActivityAutoRefresh();
 }
 
 async function initializeSalesPage() {
@@ -279,21 +286,9 @@ async function loadDashboardData() {
             console.error('❌ Error loading today sales:', salesError);
         }
 
-        // Load inventory alerts for current business only
-        const { data: lowStockProducts, error: inventoryError } = await supabase
-            .from('products')
-            .select('id')
-            .eq('business_id', currentBusiness.id)
-            .lte('current_stock', 5)
-            .eq('is_active', true);
+        // 🔥 FIXED: Use same logic as inventory for low stock count
+        await updateDashboardLowStockCount();
         
-        if (!inventoryError && lowStockProducts) {
-            const lowStockElement = document.getElementById('low-stock-count');
-            if (lowStockElement) lowStockElement.textContent = lowStockProducts.length;
-        } else if (inventoryError) {
-            console.error('❌ Error loading low stock products:', inventoryError);
-        }
-
         // Load financial summary
         if (window.loadFinancialSummary) {
             await loadFinancialSummary();
@@ -303,6 +298,64 @@ async function loadDashboardData() {
         console.error('❌ Dashboard data load error:', error);
     }
 }
+
+// 🔥 NEW: Centralized function to update dashboard low stock count
+async function updateDashboardLowStockCount() {
+    console.log('📊 Updating dashboard low stock count...');
+    
+    if (!currentBusiness?.id) return;
+    
+    try {
+        // Use the SAME logic as inventory low stock alerts
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .gt('reorder_level', 0)
+            .gt('current_stock', 0)
+            .eq('is_active', true);
+        
+        if (error) throw error;
+        
+        // Client-side filtering to match inventory logic
+        const lowStockProducts = (products || []).filter(product => {
+            const currentStock = product.current_stock || 0;
+            const reorderLevel = product.reorder_level || 0;
+            return currentStock <= reorderLevel;
+        });
+        
+        const lowStockElement = document.getElementById('low-stock-count');
+        if (lowStockElement) {
+            lowStockElement.textContent = lowStockProducts.length;
+        }
+        
+        console.log(`✅ Dashboard low stock count updated: ${lowStockProducts.length} products`);
+        
+    } catch (error) {
+        console.error('❌ Error updating dashboard low stock count:', error);
+        const lowStockElement = document.getElementById('low-stock-count');
+        if (lowStockElement) lowStockElement.textContent = '0';
+    }
+}
+
+// 🔥 NEW: Function to refresh dashboard when stock changes
+async function refreshDashboardOnStockChange() {
+    console.log('🔄 Refreshing dashboard after stock change...');
+    
+    // Only refresh if we're on the overview page
+    if (currentPage === 'overview') {
+        await updateDashboardLowStockCount();
+        
+        // Also refresh other relevant metrics
+        if (window.loadFinancialSummary) {
+            await loadFinancialSummary();
+        }
+    }
+}
+
+// Add to dashboard.js
+window.updateDashboardLowStockCount = updateDashboardLowStockCount;
+window.refreshDashboardOnStockChange = refreshDashboardOnStockChange;
 
 function loadCharts() {
     try {
@@ -391,54 +444,249 @@ function loadCharts() {
 }
 
 async function loadRecentActivity() {
+    await loadRecentActivityAndAlerts();
+}
+
+// 🔥 NEW: Enhanced function to load both recent activity AND alerts
+async function loadRecentActivityAndAlerts() {
+    console.log('🔄 Loading recent activity and alerts...');
+    
     if (!currentBusiness?.id) {
-        console.warn('⚠️ No current business selected for recent activity');
+        console.warn('⚠️ No current business selected for activity');
         return;
     }
     
+    // Show loading state
+    showActivitiesLoadingState();
+    
     try {
-        // Check if getBusinessData function exists
-        if (typeof getBusinessData !== 'function') {
-            throw new Error('getBusinessData function not available');
-        }
+        const activities = [];
         
-        // Load recent sales for current business
-        const { data: recentSales, error } = await getBusinessData('sales', {
-            orderBy: 'created_at',
-            ascending: false,
-            limit: 5,
-            cacheKey: 'recent_activity'
-        });
+        // 1. Load recent sales (activity)
+        const recentSales = await loadRecentSalesActivity();
+        activities.push(...recentSales);
+        
+        // 2. Load low stock alerts
+        const stockAlerts = await loadLowStockAlertsActivity();
+        activities.push(...stockAlerts);
+        
+        // 3. Load out of stock alerts
+        const outOfStockAlerts = await loadOutOfStockAlertsActivity();
+        activities.push(...outOfStockAlerts);
+        
+        // 4. Load recent product additions
+        const newProducts = await loadNewProductsActivity();
+        activities.push(...newProducts);
+        
+        // Sort by timestamp (most recent first) and limit to 10 items
+        const sortedActivities = activities
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, 10);
+        
+        updateRecentActivityUI(sortedActivities);
+        
+        console.log(`✅ Loaded ${sortedActivities.length} activities and alerts`);
+        
+    } catch (error) {
+        console.error('❌ Error loading activities:', error);
+        showActivitiesErrorState();
+    } finally {
+        // Always reset button state
+        resetRefreshButton();
+    }
+}
+
+// 🔥 NEW: Show error state for activities
+function showActivitiesErrorState() {
+    const container = document.getElementById('recent-activity');
+    
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center" style="padding: 2rem; color: #6c757d;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <p>Failed to load activities</p>
+                <small class="text-muted">Please try again</small>
+                <br>
+                <button class="btn btn-primary btn-sm mt-2" onclick="loadRecentActivityAndAlerts()">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
+        `;
+    }
+}
+
+// 🔥 NEW: Reset refresh button to normal state
+function resetRefreshButton() {
+    const refreshBtn = document.getElementById('refresh-activities-btn');
+    const refreshIcon = document.getElementById('refresh-icon');
+    const refreshText = document.getElementById('refresh-text');
+    
+    if (refreshBtn && refreshIcon && refreshText) {
+        refreshBtn.disabled = false;
+        refreshIcon.className = 'fas fa-refresh';
+        refreshText.textContent = 'Refresh';
+    }
+}
+
+// 🔥 NEW: Show loading state for activities
+function showActivitiesLoadingState() {
+    const container = document.getElementById('recent-activity');
+    const refreshBtn = document.getElementById('refresh-activities-btn');
+    const refreshIcon = document.getElementById('refresh-icon');
+    const refreshText = document.getElementById('refresh-text');
+    
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center" style="padding: 2rem; color: #6c757d;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                <p>Loading activities...</p>
+                <small class="text-muted">Fetching latest data</small>
+            </div>
+        `;
+    }
+    
+    // Update button to show loading state
+    if (refreshBtn && refreshIcon && refreshText) {
+        refreshBtn.disabled = true;
+        refreshIcon.className = 'fas fa-spinner fa-spin';
+        refreshText.textContent = 'Refreshing...';
+    }
+}
+
+// 🔥 NEW: Auto-refresh activities when relevant events happen
+function setupActivityAutoRefresh() {
+    // Refresh activities when coming back to overview page
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && currentPage === 'overview') {
+            loadRecentActivityAndAlerts();
+        }
+    });
+    
+    // Refresh every 5 minutes when on overview page
+    setInterval(() => {
+        if (currentPage === 'overview') {
+            loadRecentActivityAndAlerts();
+        }
+    }, 5 * 60 * 1000); // 5 minutes
+}
+
+// 🔥 NEW: Load recent sales activity
+async function loadRecentSalesActivity() {
+    try {
+        const { data: sales, error } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(5);
         
         if (error) throw error;
         
-        const activities = recentSales ? recentSales.map(sale => ({
+        return sales ? sales.map(sale => ({
             icon: 'fa-shopping-cart',
             title: 'New Sale Created',
-            description: `Sale ${sale.invoice_number || 'N/A'} for ${formatCurrency(sale.total_amount || 0)}`,
-            time: formatTimeAgo(sale.created_at)
+            description: `Sale ${sale.invoice_number || `#${sale.id.slice(-6)}`} for ${formatCurrency(sale.total_amount || 0)}`,
+            time: formatTimeAgo(sale.created_at),
+            timestamp: sale.created_at
         })) : [];
         
-        updateRecentActivityUI(activities);
+    } catch (error) {
+        console.error('❌ Error loading sales activity:', error);
+        return [];
+    }
+}
+
+// 🔥 NEW: Load low stock alerts
+async function loadLowStockAlertsActivity() {
+    try {
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .gt('reorder_level', 0)
+            .gt('current_stock', 0)
+            .eq('is_active', true);
+        
+        if (error) throw error;
+        
+        const lowStockProducts = (products || []).filter(product => 
+            (product.current_stock || 0) <= (product.reorder_level || 0)
+        );
+        
+        return lowStockProducts.map(product => ({
+            icon: 'fa-exclamation-triangle',
+            title: 'Low Stock Alert',
+            description: `"${product.name}" is running low (${product.current_stock} left)`,
+            time: 'Just now',
+            timestamp: new Date().toISOString(),
+            isAlert: true,
+            productId: product.id
+        }));
         
     } catch (error) {
-        console.error('❌ Recent activity load error:', error);
-        // Fallback to sample data
-        const sampleActivities = [
-            {
-                icon: 'fa-shopping-cart',
-                title: 'New Sale Created',
-                description: 'Sale #INV-001 for $250.00',
-                time: '2 hours ago'
-            },
-            {
-                icon: 'fa-box',
-                title: 'Low Stock Alert',
-                description: 'Product "Wireless Mouse" is running low',
-                time: '5 hours ago'
-            }
-        ];
-        updateRecentActivityUI(sampleActivities);
+        console.error('❌ Error loading low stock alerts:', error);
+        return [];
+    }
+}
+
+// 🔥 NEW: Load out of stock alerts
+async function loadOutOfStockAlertsActivity() {
+    try {
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .eq('current_stock', 0)
+            .eq('is_active', true);
+        
+        if (error) throw error;
+        
+        return (products || []).map(product => ({
+            icon: 'fa-times-circle',
+            title: 'Out of Stock',
+            description: `"${product.name}" is out of stock`,
+            time: 'Just now',
+            timestamp: new Date().toISOString(),
+            isAlert: true,
+            productId: product.id
+        }));
+        
+    } catch (error) {
+        console.error('❌ Error loading out of stock alerts:', error);
+        return [];
+    }
+}
+
+// 🔥 NEW: Load recently added products
+async function loadNewProductsActivity() {
+    try {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .gte('created_at', yesterday.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(3);
+        
+        if (error) throw error;
+        
+        return (products || []).map(product => ({
+            icon: 'fa-box',
+            title: 'New Product Added',
+            description: `"${product.name}" was added to inventory`,
+            time: formatTimeAgo(product.created_at),
+            timestamp: product.created_at
+        }));
+        
+    } catch (error) {
+        console.error('❌ Error loading new products activity:', error);
+        return [];
     }
 }
 
@@ -450,22 +698,33 @@ function updateRecentActivityUI(activities) {
         container.innerHTML = `
             <div class="text-center" style="padding: 2rem; color: #6c757d;">
                 <i class="fas fa-info-circle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                <p>No recent activity</p>
+                <p>No recent activity or alerts</p>
+                <small class="text-muted">Activities and alerts will appear here</small>
             </div>
         `;
         return;
     }
     
     container.innerHTML = activities.map(activity => `
-        <div class="activity-item">
-            <div class="activity-icon">
+        <div class="activity-item ${activity.isAlert ? 'activity-alert' : ''}">
+            <div class="activity-icon ${activity.isAlert ? 'alert' : ''}">
                 <i class="fas ${activity.icon}"></i>
             </div>
             <div class="activity-content">
-                <div class="activity-title">${activity.title}</div>
+                <div class="activity-title">
+                    ${activity.title}
+                    ${activity.isAlert ? '<span class="alert-badge">Alert</span>' : ''}
+                </div>
                 <div class="activity-description">${activity.description}</div>
                 <div class="activity-time">${activity.time}</div>
             </div>
+            ${activity.productId ? `
+                <div class="activity-action">
+                <button class="btn btn-outline btn-sm" onclick="adjustStock('${activity.productId}')">
+                        <i class="fas fa-plus"></i> Restock
+                    </button>
+                </div>
+            ` : ''}
         </div>
     `).join('');
 }
@@ -598,6 +857,73 @@ function updateFinancialUI(summary) {
     if (avgSaleValueElement) avgSaleValueElement.textContent = formatCurrency(summary.avgSaleValue);
 }
 
+// Clear all dashboard data
+function clearDashboardData() {
+    console.log('🧹 Clearing dashboard data...');
+    
+    // Clear dashboard metrics
+    const metricIds = [
+        'today-sales', 'today-revenue', 'low-stock-count',
+        'total-sales-count', 'total-sales-amount', 'pending-invoices',
+        'avg-sale-value', 'total-products', 'total-stock-value',
+        'out-of-stock-count', 'low-stock-count'
+    ];
+    
+    metricIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = '0';
+        }
+    });
+    
+    // Clear charts
+    if (window.salesChart) {
+        salesChart.destroy();
+        salesChart = null;
+    }
+    if (window.revenueChart) {
+        revenueChart.destroy();
+        revenueChart = null;
+    }
+    
+    // Clear recent activity
+    const recentActivity = document.getElementById('recent-activity');
+    if (recentActivity) {
+        recentActivity.innerHTML = '';
+    }
+    
+    // Clear all page-specific data
+    clearAllPageData();
+}
+
+function clearAllPageData() {
+    console.log('🧹 Clearing all page data...');
+    
+    // Clear sales page data
+    const salesTable = document.getElementById('sales-table-body');
+    if (salesTable) salesTable.innerHTML = '';
+    
+    // Clear inventory page data  
+    const inventoryTable = document.getElementById('inventory-table-body');
+    if (inventoryTable) inventoryTable.innerHTML = '';
+    
+    // Clear staff page data
+    const staffTable = document.getElementById('staff-table-body');
+    if (staffTable) staffTable.innerHTML = '';
+    
+    // Clear customer page data
+    const customersTable = document.getElementById('customers-table-body');
+    if (customersTable) customersTable.innerHTML = '';
+    
+    // Clear any other page data
+    const allTableBodies = document.querySelectorAll('tbody');
+    allTableBodies.forEach(tbody => {
+        if (tbody.innerHTML.trim() !== '') {
+            tbody.innerHTML = '';
+        }
+    });
+}
+
 // 🔥 ADD: Make functions globally available
 window.showDashboard = showDashboard;
 window.showDashboardPage = showDashboardPage;
@@ -608,5 +934,7 @@ window.initializeStaffPage = initializeStaffPage;
 window.quickSale = quickSale;
 window.exportData = exportData;
 window.showFirstAccessiblePage = showFirstAccessiblePage;
+window.loadRecentActivityAndAlerts = loadRecentActivityAndAlerts;
+window.loadRecentActivity = loadRecentActivityAndAlerts;
 
 console.log('✅ Enhanced dashboard functions loaded successfully');

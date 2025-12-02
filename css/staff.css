@@ -93,39 +93,6 @@
     box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
 }
 
-/* Buttons */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-
-.btn-primary {
-    background: #409eff;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #337ecc;
-}
-
-.btn-secondary {
-    background: #6c757d;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background: #545b62;
-}
-
 /* Table Styles */
 #staff-page .table-responsive {
     background: white;
@@ -161,39 +128,6 @@
 
 #staff-page .data-table tbody tr:hover {
     background: #f8f9fa;
-}
-
-/* Action Buttons */
-.action-buttons {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-}
-
-.btn-outline {
-    background: white;
-    color: #606266;
-    border: 1px solid #dcdfe6;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: all 0.2s ease;
-}
-
-.btn-outline:hover {
-    border-color: #409eff;
-    color: #409eff;
-}
-
-.btn-outline:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-outline.btn-sm {
-    padding: 4px 8px;
-    font-size: 12px;
 }
 
 /* Staff Avatar */

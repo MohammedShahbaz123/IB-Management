@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Add this to your index.html head section -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     
     <!-- CSS Files -->
     <link rel="stylesheet" href="css/main.css">
@@ -17,14 +21,16 @@
     <link rel="stylesheet" href="css/inventory.css">
     <link rel="stylesheet" href="css/sales.css">
     <link rel="stylesheet" href="css/notifications.css">
+    <link rel="stylesheet" href="css/parties.css">
     
     <script>
         // Add your Supabase credentials here
         const SUPABASE_URL = 'https://lgvbltlxwbpwojjkobbr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmJsdGx4d2Jwd29qamtvYmJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1NjI3ODQsImV4cCI6MjA3NTEzODc4NH0.dXqnS2BAZ1sCxFhB9HEK5a3zfqyh7sozoBCWqhr332E';
     </script>
-</head>
+</head> 
 <body>
+
     <!-- Initial Loading Screen -->
     <div id="app-loading">
         <div class="loading-spinner"></div>
@@ -187,10 +193,6 @@
                     <div class="form-group">
                         <label for="signup-email">Business Email</label>
                         <input type="email" id="signup-email" class="form-control" placeholder="your@business.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="business-name">Business Name</label>
-                        <input type="text" id="business-name" class="form-control" placeholder="Your Business Name" required>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block" id="signup-submit">
                         <span id="signup-text">Continue</span>
@@ -381,7 +383,7 @@
 
                 <!-- Enhanced Stats Grid -->
                 <div class="stats-grid">
-                    <div class="stat-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
+                    <div class="stat-card sales-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
                         <div class="stat-icon" style="background: var(--primary);">
                             <i class="fas fa-shopping-cart"></i>
                         </div>
@@ -391,7 +393,7 @@
                             <small id="sales-change" class="financial-positive">+0%</small>
                         </div>
                     </div>
-                    <div class="stat-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
+                    <div class="stat-card revenue-card" onclick="showDashboardPage('sales')" style="cursor: pointer;">
                         <div class="stat-icon" style="background: var(--success);">
                             <i class="fas fa-dollar-sign"></i>
                         </div>
@@ -401,16 +403,16 @@
                             <small id="revenue-change" class="financial-positive">+0%</small>
                         </div>
                     </div>
-                    <div class="stat-card" onclick="showDashboardPage('inventory')" style="cursor: pointer;">
-                        <div class="stat-icon" style="background: var(--warning);">
-                            <i class="fas fa-box-open"></i>
-                        </div>
-                        <div class="stat-info">
-                            <h3 id="low-stock-count">0</h3>
-                            <p>Low Stock Items</p>
-                            <small>Needs attention</small>
-                        </div>
-                    </div>
+                    <div class="stat-card" onclick="showFilteredInventoryPage('low_stock')" style="cursor: pointer;">
+    <div class="stat-icon" style="background: var(--warning);">
+        <i class="fas fa-box-open"></i>
+    </div>
+    <div class="stat-info">
+        <h3 id="low-stock-count">0</h3>
+        <p>Low Stock Items</p>
+        <small>Click to view details</small>
+    </div>
+</div>
                     <div class="stat-card" onclick="showDashboardPage('purchases')" style="cursor: pointer;">
                         <div class="stat-icon" style="background: var(--danger);">
                             <i class="fas fa-exclamation-triangle"></i>
@@ -424,7 +426,7 @@
                 </div>
 
                 <!-- Financial Summary -->
-                <div class="content-card">
+                <div class="content-card financial-summary-card">
                     <div class="card-header">
                         <h2>Financial Summary</h2>
                         <div class="header-actions">
@@ -458,7 +460,7 @@
                 </div>
 
                 <!-- Charts Section -->
-                <div class="content-card">
+                <div class="content-card Performance-analytics-card">
                     <div class="card-header">
                         <h2>Performance Analytics</h2>
                         <div class="header-actions">
@@ -480,34 +482,22 @@
                 </div>
 
                 <!-- Recent Activity & Alerts -->
-                <div class="content-card">
-                    <div class="card-header">
-                        <h2>Recent Activity & Alerts</h2>
-                        <button class="btn btn-outline btn-sm" onclick="loadRecentActivity()"><i class="fas fa-refresh"></i> Refresh</button>
-                    </div>
-                    <div id="recent-activity">
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class="fas fa-shopping-cart"></i>
-                            </div>
-                            <div class="activity-content">
-                                <div class="activity-title">New Sale Created</div>
-                                <div class="activity-description">Sale #INV-001 for $250.00</div>
-                                <div class="activity-time">2 hours ago</div>
-                            </div>
-                        </div>
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class="fas fa-box"></i>
-                            </div>
-                            <div class="activity-content">
-                                <div class="activity-title">Low Stock Alert</div>
-                                <div class="activity-description">Product "Wireless Mouse" is running low</div>
-                                <div class="activity-time">5 hours ago</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="content-card">
+    <div class="card-header">
+        <h2>Recent Activity & Alerts</h2>
+        <button class="btn btn-outline btn-sm" onclick="loadRecentActivityAndAlerts()" id="refresh-activities-btn">
+            <i class="fas fa-refresh" id="refresh-icon"></i>
+            <span id="refresh-text">Refresh</span>
+        </button>
+    </div>
+    <div id="recent-activity">
+        <!-- Content will be loaded dynamically -->
+        <div class="text-center" style="padding: 2rem; color: #6c757d;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+            <p>Loading activities...</p>
+        </div>
+    </div>
+</div>
             </div>
 
             <!-- Enhanced Inventory Management -->
@@ -518,18 +508,23 @@
                         <p>Manage stock levels, suppliers, and product information</p>
                     </div>
                     <div class="header-actions">
-                        <button class="btn btn-primary" onclick="showAddProductModal()"><i class="fas fa-plus"></i> Add Product</button>
-                        <button class="btn btn-outline" onclick="exportData('inventory')"><i class="fas fa-download"></i> Export</button>
-                        <button class="btn btn-outline" onclick="showBulkUpdateModal()"><i class="fas fa-edit"></i> Bulk Update</button>
-                        <button class="btn btn-outline" onclick="showImportModal()"><i class="fas fa-upload"></i> Import</button>
-                    </div>
+    <button class="btn btn-primary" onclick="showAddProductModal()">
+        <i class="fas fa-plus"></i> Add Product
+    </button>
+    <button class="btn btn-outline" onclick="showBulkEditor()">
+        <i class="fas fa-table"></i> Spreadsheet Editor
+    </button>
+    <button class="btn btn-outline" onclick="exportData('inventory')">
+        <i class="fas fa-download"></i> Export
+    </button>
+</div>
                 </div>
                 
                 <!-- Inventory Summary -->
                 <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 1.5rem;">
                     <div class="stat-card">
                         <div class="stat-info">
-                            <h4 id="total-products">0</h4>
+                            <h4 id="products">0</h4>
                             <p>Total Products</p>
                         </div>
                     </div>
@@ -539,16 +534,16 @@
                             <p>Stock Value</p>
                         </div>
                     </div>
-                    <div class="stat-card status-warning">
-                        <div class="stat-info">
-                            <h4 id="out-of-stock-count">0</h4>
-                            <p>Out of Stock</p>
-                        </div>
-                    </div>
-                    <div class="stat-card status-critical">
+                    <div class="stat-card status-warning" onclick="showFilteredInventoryPage('low_stock')" style="cursor: pointer;"> 
                         <div class="stat-info">
                             <h4 id="critical-stock-count">0</h4>
-                            <p>Critical Stock</p>
+                            <p>Low Stock</p>
+                        </div>
+                    </div>
+                    <div class="stat-card status-critical" onclick="showFilteredInventoryPage('out_of_stock')" style="cursor: pointer;">
+                        <div class="stat-info">
+                            <h4 id="out-stock-count">0</h4>
+                            <p>Out of Stock</p>
                         </div>
                     </div>
                 </div>
@@ -557,7 +552,7 @@
                 <div class="content-card">
                     <div class="card-header">
                         <h2>Product Inventory</h2>
-                        <div class="header-actions">
+                        <div class="header-actions search-box">
                             <input type="text" id="inventory-search" class="form-control" placeholder="Search products..." style="width: 200px;">
                             <select id="category-filter" class="form-control" style="width: 150px;">
                                 <option value="">All Categories</option>
@@ -577,9 +572,7 @@
                                 <tr>
                                     <th>Product</th>
                                     <th>SKU</th>
-                                    <th>Category</th>
                                     <th>Current Stock</th>
-                                    <th>Reorder Level</th>
                                     <th>Cost Price</th>
                                     <th>Selling Price</th>
                                     <th>Stock Value</th>
@@ -594,17 +587,6 @@
                     </div>
                     <div class="text-center mt-2">
                         <div id="inventory-pagination"></div>
-                    </div>
-                </div>
-
-                <!-- Low Stock Alerts -->
-                <div class="content-card status-warning">
-                    <div class="card-header">
-                        <h2><i class="fas fa-exclamation-triangle"></i> Low Stock Alerts</h2>
-                        <button class="btn btn-outline btn-sm" onclick="generatePurchaseOrder()"><i class="fas fa-clipboard-list"></i> Generate PO</button>
-                    </div>
-                    <div id="low-stock-alerts">
-                        <!-- Dynamic low stock products -->
                     </div>
                 </div>
             </div>
@@ -717,10 +699,411 @@
                 </div>
             </div>
 
-            <!-- Other pages would go here with similar enhanced features -->
-            <div id="parties-page" class="page-content d-none">
-                <!-- Parties management content -->
+            <!-- Parties Management Page -->
+<div id="parties-page" class="page-content d-none">
+    <div class="dashboard-header">
+        <div class="dashboard-title">
+            <h1>Parties Management</h1>
+            <p>Manage customers, suppliers, and other business contacts</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="showAddPartyModal()">
+                <i class="fas fa-plus"></i> Add Party
+            </button>
+            <button class="btn btn-outline" onclick="exportParties()">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="quick-stats">
+        <div class="quick-stat" onclick="showPartyGroup('customer')">
+            <div class="quick-stat-value" id="total-customers">0</div>
+            <div class="quick-stat-label">Customers</div>
+        </div>
+        <div class="quick-stat" onclick="showPartyGroup('supplier')">
+            <div class="quick-stat-value" id="total-suppliers">0</div>
+            <div class="quick-stat-label">Suppliers</div>
+        </div>
+        <div class="quick-stat" onclick="showPartyGroup('active')">
+            <div class="quick-stat-value" id="active-parties">0</div>
+            <div class="quick-stat-label">Active</div>
+        </div>
+        <div class="quick-stat" onclick="showPartyGroup('credit')">
+            <div class="quick-stat-value" id="total-credit">$0</div>
+            <div class="quick-stat-label">Credit Due</div>
+        </div>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="party-search-container">
+        <i class="fas fa-search party-search-icon"></i>
+        <input type="text" id="party-search" class="form-control party-search-input" placeholder="Search parties by name, email, phone...">
+    </div>
+
+    <div class="party-filters">
+        <select id="party-type-filter" class="form-control party-filter-select" onchange="loadParties()">
+            <option value="">All Types</option>
+            <option value="customer">Customers</option>
+            <option value="supplier">Suppliers</option>
+            <option value="both">Both</option>
+        </select>
+        
+        <select id="party-status-filter" class="form-control party-filter-select" onchange="loadParties()">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+        
+        <select id="party-balance-filter" class="form-control party-filter-select" onchange="loadParties()">
+            <option value="">All Balances</option>
+            <option value="credit">Has Credit</option>
+            <option value="debit">Has Debit</option>
+            <option value="zero">Zero Balance</option>
+        </select>
+        
+        <button class="btn btn-outline" onclick="clearPartyFilters()">
+            <i class="fas fa-times"></i> Clear Filters
+        </button>
+    </div>
+
+    <!-- Party Groups -->
+    <div class="party-groups">
+        <div class="group-tab active" onclick="showPartyGroup('all')">All Parties</div>
+        <div class="group-tab" onclick="showPartyGroup('favorites')">Favorites</div>
+        <div class="group-tab" onclick="showPartyGroup('recent')">Recent</div>
+    </div>
+
+    <!-- Bulk Actions Bar (hidden by default) -->
+    <div id="bulk-actions-bar" class="bulk-actions-bar d-none">
+        <div class="bulk-selected-count">0 parties selected</div>
+        <div class="bulk-action-buttons">
+            <button class="btn btn-outline btn-sm" onclick="sendBulkEmail()">
+                <i class="fas fa-envelope"></i> Email Selected
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="exportSelectedParties()">
+                <i class="fas fa-download"></i> Export Selected
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelectedParties()">
+                <i class="fas fa-trash"></i> Delete Selected
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="clearPartySelection()">
+                <i class="fas fa-times"></i> Clear Selection
+            </button>
+        </div>
+    </div>
+
+    <!-- Parties Grid View -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2>All Parties</h2>
+            <div class="view-toggle">
+                <button class="btn btn-outline btn-sm active" onclick="togglePartyView('grid')">
+                    <i class="fas fa-th-large"></i> Grid
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="togglePartyView('table')">
+                    <i class="fas fa-list"></i> List
+                </button>
             </div>
+        </div>
+        
+        <!-- Grid View -->
+        <div id="parties-grid-view" class="parties-grid">
+            <!-- Parties will be loaded here -->
+            <div id="parties-grid-content">
+                <div class="text-center py-5">
+                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                    <h4>No Parties Found</h4>
+                    <p class="text-muted">Add your first customer or supplier to get started</p>
+                    <button class="btn btn-primary mt-2" onclick="showAddPartyModal()">
+                        <i class="fas fa-plus"></i> Add Your First Party
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Table View (hidden by default) -->
+        <div id="parties-table-view" class="d-none">
+            <div class="table-responsive">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-parties" onchange="toggleSelectAllParties(this.checked)">
+                            </th>
+                            <th>Party</th>
+                            <th>Type</th>
+                            <th>Contact</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th>Last Transaction</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="parties-table-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="text-center mt-4">
+            <div id="parties-pagination"></div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="transaction-history">
+        <h5><i class="fas fa-history"></i> Recent Party Transactions</h5>
+        <div id="recent-party-transactions">
+            <div class="text-center py-3 text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Loading transactions...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Party Modal -->
+<div id="add-party-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>Add New Party</h3>
+            <button class="close-btn" onclick="hideAddPartyModal()">&times;</button>
+        </div>
+        <form id="add-party-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="party-type">Party Type *</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="party-type" value="customer" checked>
+                            <span class="radio-custom"></span>
+                            Customer
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="party-type" value="supplier">
+                            <span class="radio-custom"></span>
+                            Supplier
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="party-name">Name *</label>
+                        <input type="text" id="party-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="party-email">Email</label>
+                        <input type="email" id="party-email" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="party-phone">Phone *</label>
+                        <input type="tel" id="party-phone" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="party-company">Company</label>
+                        <input type="text" id="party-company" class="form-control">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="party-address">Address</label>
+                    <textarea id="party-address" class="form-control" rows="2"></textarea>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="party-gst">GST Number</label>
+                        <input type="text" id="party-gst" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="party-pan">PAN Number</label>
+                        <input type="text" id="party-pan" class="form-control">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="party-opening-balance">Opening Balance</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">$</span>
+                        </div>
+                        <input type="number" id="party-opening-balance" class="form-control" step="0.01" value="0">
+                        <div class="input-group-append">
+                            <select class="form-control" id="balance-type">
+                                <option value="credit">Credit (They owe you)</option>
+                                <option value="debit">Debit (You owe them)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="party-credit-limit">Credit Limit ($)</label>
+                    <input type="number" id="party-credit-limit" class="form-control" step="0.01" min="0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="party-notes">Notes</label>
+                    <textarea id="party-notes" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideAddPartyModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Party
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Party Modal -->
+<div id="edit-party-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>Edit Party</h3>
+            <button class="close-btn" onclick="hideEditPartyModal()">&times;</button>
+        </div>
+        <form id="edit-party-form">
+            <input type="hidden" id="edit-party-id">
+            <div class="modal-body">
+                <!-- Same structure as add party modal, but with edit- prefix on IDs -->
+                <div class="form-group">
+                    <label for="edit-party-type">Party Type *</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="edit-party-type" value="customer" id="edit-party-type-customer">
+                            <span class="radio-custom"></span>
+                            Customer
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="edit-party-type" value="supplier" id="edit-party-type-supplier">
+                            <span class="radio-custom"></span>
+                            Supplier
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit-party-name">Name *</label>
+                        <input type="text" id="edit-party-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-party-email">Email</label>
+                        <input type="email" id="edit-party-email" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-party-phone">Phone *</label>
+                        <input type="tel" id="edit-party-phone" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-party-company">Company</label>
+                        <input type="text" id="edit-party-company" class="form-control">
+                    </div>
+                </div>
+                
+                <!-- Rest of the form fields similar to add party modal -->
+                <!-- ... -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideEditPartyModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Party Details Modal -->
+<div id="party-details-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <div class="party-header-content">
+                <div class="party-avatar" id="party-avatar">A</div>
+                <div>
+                    <h3 id="party-details-name">Party Name</h3>
+                    <p class="text-muted" id="party-details-type">Customer</p>
+                </div>
+            </div>
+            <button class="close-btn" onclick="hidePartyDetailsModal()">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+            <div class="party-details-section">
+                <h5><i class="fas fa-info-circle"></i> Contact Information</h5>
+                <div class="party-details">
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Phone</span>
+                        <span class="party-detail-value" id="details-party-phone">-</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Email</span>
+                        <span class="party-detail-value" id="details-party-email">-</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Company</span>
+                        <span class="party-detail-value" id="details-party-company">-</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Address</span>
+                        <span class="party-detail-value" id="details-party-address">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="party-details-section">
+                <h5><i class="fas fa-file-invoice-dollar"></i> Financial Information</h5>
+                <div class="party-details">
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Current Balance</span>
+                        <span class="party-detail-value" id="details-party-balance">$0.00</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">Credit Limit</span>
+                        <span class="party-detail-value" id="details-party-credit-limit">$0.00</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">GST Number</span>
+                        <span class="party-detail-value" id="details-party-gst">-</span>
+                    </div>
+                    <div class="party-detail-item">
+                        <span class="party-detail-label">PAN Number</span>
+                        <span class="party-detail-value" id="details-party-pan">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="party-details-section">
+                <h5><i class="fas fa-chart-line"></i> Transaction Summary</h5>
+                <div id="party-transaction-summary">
+                    Loading transaction summary...
+                </div>
+            </div>
+            
+            <div class="party-details-section">
+                <h5><i class="fas fa-history"></i> Recent Transactions</h5>
+                <div id="party-recent-transactions">
+                    Loading recent transactions...
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="quickTransaction()">
+                <i class="fas fa-exchange-alt"></i> Quick Transaction
+            </button>
+            <button class="btn btn-primary" onclick="editPartyFromDetails()">
+                <i class="fas fa-edit"></i> Edit Party
+            </button>
+        </div>
+    </div>
+</div>
 
             <div id="purchases-page" class="page-content d-none">
                 <!-- Purchases management content -->
@@ -861,6 +1244,271 @@
             <div id="settings-page" class="page-content d-none">
                 <!-- Settings content -->
             </div>
+
+<!-- Product Details Page -->
+<div id="product-details-page" class="page-content d-none">
+    <div class="product-details-container">
+        <div class="product-details-grid">
+            <!-- Left Sidebar - Search & Product List -->
+            <div class="product-sidebar">
+                <div class="content-product-card">
+                    <div class="card-header">
+                        <h5 class="card-title">Products</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Search Bar -->
+                        <div class="search-box">
+                            <div class="input-group">
+                                <input type="text" id="product-details-search" class="form-control" placeholder="Search products...">
+                            </div>
+                        </div>
+                        
+                        <!-- Product List -->
+                        <div id="product-list-sidebar" class="product-list-sidebar">
+                            <div class="list-loading text-center py-3">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p class="mt-2">Loading products...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Content - Updated Product Details -->
+            <div class="product-details-main">
+                <div class="content-card">
+                    <div class="card-header">
+                        <div class="card-header-content">
+                            <div class="action-buttons">
+                                <button class="btn btn-outline btn-sm" onclick="hideProductDetails()">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <div class="header-title">
+                                <h4 class="card-title" id="detail-page-title">Product Details</h4>
+                            </div>
+                                <button class="btn btn-outline btn-sm" id="edit-product-btn" onclick="editCurrentProduct()" title="Edit Stock">
+    <i class="fas fa-edit"></i> Edit
+</button>
+<button class="btn btn-outline btn-sm" id="adjust-stock-btn" onclick="adjustCurrentProductStock()" title="Adjust Stock">
+    <i class="fas fa-exchange-alt"></i> Adjust Stock
+</button>
+<button class="btn btn-outline btn-sm btn-danger" onclick="deleteCurrentProduct()" title="Delete">
+    <i class="fas fa-trash"></i>
+</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Loading State -->
+                        <div id="product-details-loading" class="text-center py-5">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p class="mt-3">Loading product details...</p>
+                        </div>
+                        
+                        <!-- Updated Product Details Content -->
+                        <div id="product-details-content" class="d-none">
+
+                            <hr class="section-divider">
+
+                            <!-- General Details Section -->
+                            <div class="details-section mb-4">
+                                <div class="section-header mb-3">
+                                    <h6 class="section-title">General Details</h6>
+                                </div>
+                                <div class="detail-grid">
+                                    <div class="detail-column">
+                                        <div class="detail-label">Item Name</div>
+                                        <div class="detail-value font-weight-bold" id="detail-product-name">-</div>
+                                    </div>
+                                    <div class="detail-row two-column">
+                                        <div class="detail-column">
+                                            <div class="detail-label">Item Code</div>
+                                            <div class="detail-value" id="detail-product-sku">-</div>
+                                        </div>
+                                        <div class="detail-column">
+                                            <div class="detail-label">Category</div>
+                                            <div class="detail-value" id="detail-product-category">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="detail-row two-column">
+                                        <div class="detail-column">
+                                            <div class="detail-label">Current Stock</div>
+                                            <div class="detail-value font-weight-bold stock-value" id="detail-current-stock">-</div>
+                                        </div>
+                                        <div class="detail-column">
+                                            <div class="detail-label">Low Stock Quantity</div>
+                                            <div class="detail-value font-weight-bold text-warning" id="detail-reorder-level">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="detail-row">
+                                        <div class="detail-label">Low Stock Warning</div>
+                                        <div class="detail-value">
+                                            <span class="status-indicator enabled" id="low-stock-warning">Enabled</span>
+                                        </div>
+                                    </div>
+                                    <div class="detail-row">
+                                        <div class="detail-label">Item Description</div>
+                                        <div class="detail-value" id="detail-product-description">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="section-divider">
+
+                            <!-- Pricing Details Section -->
+                            <div class="details-section mb-4">
+                                <div class="section-header mb-3">
+                                    <h6 class="section-title">Pricing Details</h6>
+                                </div>
+                                <div class="detail-grid">
+                                    <div class="detail-row">
+                                        <div class="detail-label">Sales Price</div>
+                                        <div class="detail-value font-weight-bold price-value" id="detail-selling-price">-</div>
+                                    </div>
+                                    <div class="detail-row two-column">
+                                        <div class="detail-column">
+                                            <div class="detail-label">Purchase Price</div>
+                                            <div class="detail-value" id="detail-cost-price">-</div>
+                                        </div>
+                                        <div class="detail-column">
+                                            <div class="detail-label">HSN Code</div>
+                                            <div class="detail-value" id="detail-hsn-code">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="detail-row">
+                                        <div class="detail-label">GST Tax Rate</div>
+                                        <div class="detail-value" id="detail-gst-rate">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Error State -->
+                        <div id="product-details-error" class="text-center py-5 d-none">
+                            <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                            <h5 class="mt-3">Product Not Found</h5>
+                            <p class="text-muted">The requested product could not be loaded.</p>
+                            <button class="btn btn-primary mt-2" onclick="hideProductDetails()">
+                                <i class="fas fa-arrow-left"></i> Back to Inventory
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtered Inventory Page -->
+<div id="filtered-inventory-page" class="page-content d-none">
+    <div class="filtered-inventory-container">
+        <div class="page-header">
+            <div class="header-left">
+                <button class="btn btn-outline btn-sm" onclick="goBackToInventory()">
+                    <i class="fas fa-arrow-left"></i> Back to Inventory
+                </button>
+                <div class="header-title">
+                    <h2 id="filtered-page-title">Filtered Products</h2>
+                    <p id="filtered-page-subtitle">Showing products based on filter</p>
+                </div>
+            </div>
+            <div class="header-right" id="filtered-page-actions">
+                <!-- Action buttons will be dynamically added here -->
+            </div>
+        </div>
+
+        <!-- Filter Info Banner -->
+        <div class="filter-info-banner" id="filter-info-banner">
+            <div class="filter-info-content">
+                <i class="fas fa-filter"></i>
+                <div class="filter-details">
+                    <h5 id="filter-type">Filter Applied</h5>
+                    <p id="filter-description"></p>
+                    <div class="filter-stats">
+                        <span id="filtered-count">0</span> products found
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export/Print Controls -->
+        <div class="export-controls d-none">
+                <div class="form-group">
+                    <label for="export-columns">Include Columns:</label>
+                    <select id="export-columns" class="form-control" multiple>
+                        <option value="name" selected>Product Name</option>
+                        <option value="sku" selected>SKU</option>
+                        <option value="category" selected>Category</option>
+                        <option value="current_stock" selected>Current Stock</option>
+                        <option value="reorder_level" selected>Reorder Level</option>
+                        <option value="cost_price" selected>Cost Price</option>
+                        <option value="selling_price" selected>Selling Price</option>
+                        <option value="stock_value" selected>Stock Value</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="content-card">
+            <div class="card-header">
+                <h3 id="filtered-table-title">Filtered Products</h3>
+                <div class="table-actions">
+                    <div class="search-box">
+                        <input type="text" id="filtered-search" class="form-control" placeholder="Search in filtered results...">
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="refreshFilteredView()">
+                        <i class="fas fa-refresh"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th>Current Stock</th>
+                            <th>Reorder Level</th>
+                            <th>Status</th>
+                            <th>Cost Price</th>
+                            <th>Selling Price</th>
+                            <th>Stock Value</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filtered-table-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-footer">
+                <div class="table-summary">
+                    <strong>Total:</strong> <span id="filtered-total-count">0</span> products | 
+                    <strong>Total Stock Value:</strong> <span id="filtered-total-value">$0</span>
+                </div>
+                <div class="table-pagination" id="filtered-pagination"></div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <h4>Quick Actions</h4>
+            <div class="action-buttons">
+                <button class="btn btn-outline" onclick="emailFilteredReport()">
+                    <i class="fas fa-envelope"></i> Email Report
+                </button>
+                <button class="btn btn-outline" onclick="shareFilteredReport()">
+                    <i class="fas fa-share-alt"></i> Share Report
+                </button>
+                <button class="btn btn-outline" onclick="saveFilteredView()">
+                    <i class="fas fa-bookmark"></i> Save This View
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
         </div>
     </div>
 
@@ -938,83 +1586,478 @@
 </div>
 
     <!-- Add Product Modal -->
-    <div id="add-product-modal" class="modal d-none">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3>Add New Product</h3>
-                <button class="btn btn-outline btn-sm" onclick="hideAddProductModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form id="add-product-form">
-                <div class="form-row">
-                    <div class="form-group" style="flex: 2;">
+<div id="add-product-modal" class="modal d-none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add New Product</h3>
+            <button class="close-btn" onclick="hideAddProductModal()">&times;</button>
+        </div>
+        <form id="add-product-form">
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group">
                         <label for="product-name">Product Name *</label>
-                        <input type="text" id="product-name" class="form-control" placeholder="Enter product name" required>
+                        <input type="text" id="product-name" class="form-control" required>
                     </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label for="product-sku">SKU *</label>
-                        <input type="text" id="product-sku" class="form-control" placeholder="SKU" required>
+                    <div class="form-group">
+                        <label for="product-sku">SKU</label>
+                        <input type="text" id="product-sku" class="form-control">
                     </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group" style="flex: 1;">
+                    <div class="form-group">
                         <label for="product-category">Category</label>
                         <select id="product-category" class="form-control">
                             <option value="">Select Category</option>
-                            <option value="electronics">Electronics</option>
-                            <option value="clothing">Clothing</option>
-                            <option value="food">Food & Beverages</option>
-                            <option value="office">Office Supplies</option>
-                            <option value="other">Other</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Books">Books</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Beauty">Beauty</option>
+                            <option value="Toys">Toys</option>
+                            <option value="Automotive">Automotive</option>
                         </select>
                     </div>
-                    <div class="form-group" style="flex: 1;">
+                    <div class="form-group">
                         <label for="product-unit">Unit</label>
-                        <input type="text" id="product-unit" class="form-control" placeholder="e.g., pcs, kg, liters">
+                        <select id="product-unit" class="form-control">
+                            <option value="QTY">Quantity</option>
+                            <option value="PCS">Pieces</option>
+                            <option value="KGS">Kilograms</option>
+                            <option value="G">Grams</option>
+                            <option value="L">Liters</option>
+                            <option value="ML">Milliliters</option>
+                            <option value="M">Meters</option>
+                            <option value="CM">Centimeters</option>
+                            <option value="BOX">Box</option>
+                            <option value="PCKS">Pack</option>
+                        </select>
                     </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group" style="flex: 1;">
-                        <label for="product-cost">Cost Price *</label>
-                        <input type="number" id="product-cost" class="form-control" placeholder="0.00" step="0.01" required>
+                    <div class="form-group">
+                        <label for="product-cost">Cost Price ($) *</label>
+                        <input type="number" id="product-cost" class="form-control" step="0.01" min="0" required>
                     </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label for="product-price">Selling Price *</label>
-                        <input type="number" id="product-price" class="form-control" placeholder="0.00" step="0.01" required>
+                    <div class="form-group">
+                        <label for="product-price">Selling Price ($) *</label>
+                        <input type="number" id="product-price" class="form-control" step="0.01" min="0" required>
                     </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group" style="flex: 1;">
-                        <label for="product-stock">Initial Stock *</label>
-                        <input type="number" id="product-stock" class="form-control" placeholder="0" required>
+                    <div class="form-group">
+                        <label for="product-stock">Current Stock</label>
+                        <input type="number" id="product-stock" class="form-control" value="0" min="0">
                     </div>
-                    <div class="form-group" style="flex: 1;">
+                    <div class="form-group">
                         <label for="product-reorder">Reorder Level</label>
-                        <input type="number" id="product-reorder" class="form-control" placeholder="10" value="10">
+                        <input type="number" id="product-reorder" class="form-control" value="0" min="0">
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label for="product-description">Description</label>
-                    <textarea id="product-description" class="form-control" placeholder="Product description" rows="3"></textarea>
+                    <textarea id="product-description" class="form-control" rows="3"></textarea>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideAddProductModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Product
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
-                <div class="form-actions">
-                    <button type="button" class="btn btn-outline" onclick="hideAddProductModal()">
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Add Product
-                    </button>
+<!-- Edit Product Modal -->
+<div id="edit-product-modal" class="modal d-none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Product</h3>
+            <button class="close-btn" onclick="hideEditProductModal()">&times;</button>
+        </div>
+        <form id="edit-product-form">
+            <input type="hidden" id="edit-product-id">
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit-product-name">Product Name *</label>
+                        <input type="text" id="edit-product-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-sku">SKU</label>
+                        <input type="text" id="edit-product-sku" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-category">Category</label>
+                        <select id="edit-product-category" class="form-control">
+                            <option value="">Select Category</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Books">Books</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Beauty">Beauty</option>
+                            <option value="Toys">Toys</option>
+                            <option value="Automotive">Automotive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-unit">Unit</label>
+                        <select id="edit-product-unit" class="form-control">
+                            <option value="QTY">Quantity</option>
+                            <option value="pcs">Pieces</option>
+                            <option value="kg">Kilograms</option>
+                            <option value="g">Grams</option>
+                            <option value="l">Liters</option>
+                            <option value="ml">Milliliters</option>
+                            <option value="m">Meters</option>
+                            <option value="cm">Centimeters</option>
+                            <option value="box">Box</option>
+                            <option value="pack">Pack</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-cost">Cost Price ($) *</label>
+                        <input type="number" id="edit-product-cost" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-price">Selling Price ($) *</label>
+                        <input type="number" id="edit-product-price" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-stock">Current Stock</label>
+                        <input type="number" id="edit-product-stock" class="form-control" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-reorder">Reorder Level</label>
+                        <input type="number" id="edit-product-reorder" class="form-control" value="0" min="0">
+                    </div>
                 </div>
-            </form>
+                <div class="form-group">
+                    <label for="edit-product-description">Description</label>
+                    <textarea id="edit-product-description" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideEditProductModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Update Product
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stock Adjustment Modal -->
+<div id="adjust-stock-modal" class="modal d-none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Adjust Stock</h3>
+            <button class="close-btn" onclick="hideAdjustStockModal()">&times;</button>
+        </div>
+        <form id="adjust-stock-form">
+            <input type="hidden" id="adjust-product-id">
+            <input type="hidden" id="adjust-current-stock">
+            <div class="modal-body">
+                <div class="product-info-card">
+                    <h4 id="adjust-product-name"></h4>
+                    <div class="product-details">
+                        <span id="adjust-product-sku"></span> • 
+                        <span id="adjust-product-category"></span> • 
+                        Current Stock: <span id="adjust-current-stock-display" class="stock-badge"></span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Adjustment Type</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="adjustment-type" value="add" checked>
+                            <span class="radio-custom"></span>
+                            Add Stock
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="adjustment-type" value="remove">
+                            <span class="radio-custom"></span>
+                            Remove Stock
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="adjustment-type" value="set">
+                            <span class="radio-custom"></span>
+                            Set Stock
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="adjust-quantity">Quantity</label>
+                    <input type="number" id="adjust-quantity" class="form-control" min="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="adjust-reason">Reason</label>
+                    <select id="adjust-reason" class="form-control">
+                        <option value="restock">Restock</option>
+                        <option value="purchase">Purchase Order</option>
+                        <option value="return">Customer Return</option>
+                        <option value="damage">Damaged Goods</option>
+                        <option value="theft">Theft/Loss</option>
+                        <option value="count">Stock Count Adjustment</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="adjust-notes">Notes</label>
+                    <textarea id="adjust-notes" class="form-control" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="stock-preview">
+                    <strong>New Stock Level: <span id="new-stock-level" class="stock-preview-value">0</span></strong>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideAdjustStockModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-exchange-alt"></i> Update Stock
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Update Modal -->
+<div id="bulk-update-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>Bulk Update Products</h3>
+            <button class="close-btn" onclick="hideBulkUpdateModal()">&times;</button>
+        </div>
+        <form id="bulk-update-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="bulk-update-type">Update Type *</label>
+                    <select id="bulk-update-type" class="form-control" onchange="toggleBulkUpdateFields()" required>
+                        <option value="">Select update type...</option>
+                        <option value="price">Update Prices</option>
+                        <option value="stock">Update Stock Levels</option>
+                        <option value="category">Update Categories</option>
+                        <option value="reorder">Update Reorder Levels</option>
+                    </select>
+                </div>
+                
+                <!-- Price Update Fields -->
+                <div id="bulk-price-fields" class="bulk-update-section d-none">
+                    <div class="form-group">
+                        <label for="bulk-price-type">Price Adjustment Type *</label>
+                        <select id="bulk-price-type" class="form-control" required>
+                            <option value="percentage">Percentage Increase/Decrease</option>
+                            <option value="fixed">Fixed Amount</option>
+                            <option value="set">Set to Specific Value</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulk-price-value">Value *</label>
+                        <input type="number" id="bulk-price-value" class="form-control" step="0.01">
+                        <small class="form-text text-muted">Enter positive for increase, negative for decrease</small>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="bulk-update-cost" class="form-check-input">
+                        <label for="bulk-update-cost" class="form-check-label">Update Cost Price</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="bulk-update-selling" class="form-check-input" checked>
+                        <label for="bulk-update-selling" class="form-check-label">Update Selling Price</label>
+                    </div>
+                </div>
+                
+                <!-- Stock Update Fields -->
+                <div id="bulk-stock-fields" class="bulk-update-section d-none">
+                    <div class="form-group">
+                        <label for="bulk-stock-type">Stock Adjustment Type *</label>
+                        <select id="bulk-stock-type" class="form-control" required>
+                            <option value="add">Add Stock</option>
+                            <option value="set">Set Stock</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulk-stock-value">Quantity *</label>
+                        <input type="number" id="bulk-stock-value" class="form-control" min="0" required>
+                    </div>
+                </div>
+                
+                <!-- Category Update Fields -->
+                <div id="bulk-category-fields" class="bulk-update-section d-none">
+                    <div class="form-group">
+                        <label for="bulk-category-value">New Category *</label>
+                        <input type="text" id="bulk-category-value" class="form-control" placeholder="Enter new category" >
+                    </div>
+                </div>
+                
+                <!-- Reorder Level Fields -->
+                <div id="bulk-reorder-fields" class="bulk-update-section d-none">
+                    <div class="form-group">
+                        <label for="bulk-reorder-value">New Reorder Level *</label>
+                        <input type="number" id="bulk-reorder-value" class="form-control" min="0" placeholder="Enter reorder level" >
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bulk-apply-to">Apply to Products</label>
+                    <select id="bulk-apply-to" class="form-control" onchange="updateBulkAffectedCount()">
+                        <option value="all">All Products</option>
+                        <option value="category">Specific Category</option>
+                        <option value="low_stock">Low Stock Items Only</option>
+                        <option value="out_of_stock">Out of Stock Items Only</option>
+                    </select>
+                </div>
+                
+                <div id="bulk-category-select" class="form-group d-none">
+                    <label for="bulk-specific-category">Select Category</label>
+                    <select id="bulk-specific-category" class="form-control" onchange="updateBulkAffectedCount()">
+                        <option value="Electronics">Electronics</option>
+                        <option value="Clothing">Clothing</option>
+                        <option value="Books">Books</option>
+                        <option value="Home & Garden">Home & Garden</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Beauty">Beauty</option>
+                        <option value="Toys">Toys</option>
+                        <option value="Automotive">Automotive</option>
+                    </select>
+                </div>
+                
+                <div class="bulk-preview alert alert-info">
+                    <strong>Estimated affected products: <span id="bulk-affected-count">0</span></strong>
+                    <br>
+                    <small>This action will update multiple products at once. Please review your settings carefully.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideBulkUpdateModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> Apply Bulk Update
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Import Products Modal -->
+<div id="import-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>Import Products</h3>
+            <button class="close-btn" onclick="hideImportModal()">&times;</button>
+        </div>
+        <form id="import-form">
+            <div class="modal-body">
+                <div class="import-instructions">
+                    <h4>Import Instructions</h4>
+                    <p>Upload a CSV file with the following columns:</p>
+                    <ul>
+                        <li><strong>name</strong> (required) - Product name</li>
+                        <li><strong>sku</strong> (optional) - Product SKU</li>
+                        <li><strong>category</strong> (optional) - Product category</li>
+                        <li><strong>cost_price</strong> (optional) - Cost price</li>
+                        <li><strong>selling_price</strong> (optional) - Selling price</li>
+                        <li><strong>current_stock</strong> (optional) - Current stock level</li>
+                        <li><strong>reorder_level</strong> (optional) - Reorder level</li>
+                        <li><strong>unit</strong> (optional) - Unit of measurement</li>
+                        <li><strong>description</strong> (optional) - Product description</li>
+                    </ul>
+                    
+                    <div class="download-template">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="downloadCSVTemplate()">
+                            <i class="fas fa-download"></i> Download Template
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="import-file">Select CSV File</label>
+                    <input type="file" id="import-file" class="form-control" accept=".csv" required>
+                </div>
+                
+                <div class="form-check">
+                    <input type="checkbox" id="import-update-existing" class="form-check-input">
+                    <label for="import-update-existing" class="form-check-label">Update existing products (by SKU)</label>
+                </div>
+                
+                <div id="import-preview" class="import-preview d-none">
+                    <h5>Preview (first 5 rows):</h5>
+                    <div class="table-responsive">
+                        <table class="data-grid">
+                            <thead id="import-preview-head"></thead>
+                            <tbody id="import-preview-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideImportModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload"></i> Import Products
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Purchase Order Modal -->
+<div id="purchase-order-modal" class="modal d-none">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>Generate Purchase Order</h3>
+            <button class="close-btn" onclick="hidePurchaseOrderModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="purchase-order-summary">
+                <h4>Low Stock Items</h4>
+                <div id="purchase-order-items">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="po-supplier">Supplier</label>
+                <select id="po-supplier" class="form-control">
+                    <option value="">Select Supplier</option>
+                    <option value="Supplier A">Supplier A</option>
+                    <option value="Supplier B">Supplier B</option>
+                    <option value="Supplier C">Supplier C</option>
+                    <option value="Multiple">Multiple Suppliers</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="po-notes">Notes</label>
+                <textarea id="po-notes" class="form-control" rows="3" placeholder="Additional notes for the purchase order..."></textarea>
+            </div>
+            
+            <div class="po-totals">
+                <div class="total-line">
+                    <span>Total Items:</span>
+                    <span id="po-total-items">0</span>
+                </div>
+                <div class="total-line">
+                    <span>Total Quantity:</span>
+                    <span id="po-total-quantity">0</span>
+                </div>
+                <div class="total-line">
+                    <span>Estimated Cost:</span>
+                    <span id="po-estimated-cost">$0.00</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="hidePurchaseOrderModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="generatePurchaseOrderPDF()">
+                <i class="fas fa-file-pdf"></i> Generate PDF
+            </button>
+            <button type="button" class="btn btn-success" onclick="confirmPurchaseOrder()">
+                <i class="fas fa-check"></i> Confirm PO
+            </button>
         </div>
     </div>
+</div>
 
     <!-- JavaScript Files -->
     <script src="js/utils.js"></script>
@@ -1023,6 +2066,7 @@
     <script src="js/business.js"></script>
     <script src="js/staff.js"></script>
     <script src="js/inventory.js"></script>
+    <script src="js/parties.js"></script>
     <script src="js/sales.js"></script>
     <script src="js/notifications.js"></script>
 

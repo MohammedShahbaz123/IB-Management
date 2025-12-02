@@ -32,12 +32,14 @@
     color: var(--dark);
     text-decoration: none;
     transition: var(--transition);
+     width: 100%;
 }
 
 .sidebar-menu a:hover, .sidebar-menu a.active {
     background: rgba(67, 97, 238, 0.1);
     color: var(--primary);
     border-right: 3px solid var(--primary);
+    width: 100%;
 }
 
 .sidebar-menu i {
@@ -48,7 +50,7 @@
 
 .main-content {
     margin-left: 250px;
-    padding: 2rem;
+    padding: 1.5rem;
     background: #f5f7fb !important;
     min-height: calc(100vh - 80px) !important;
 }
@@ -379,4 +381,55 @@ table th {
 .quick-action-text {
     font-weight: 600;
     color: var(--dark);
+}
+
+/* Activity Alert Styling */
+.activity-alert {
+    border-left: 4px solid #f72585;
+    background-color: rgba(247, 37, 133, 0.05);
+}
+
+.activity-icon.alert {
+    background-color: #f72585;
+    color: white;
+}
+
+.alert-badge {
+    background-color: #f72585;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    margin-left: 8px;
+}
+
+.activity-action {
+    margin-left: auto;
+    padding-left: 1rem;
+}
+
+/* Loading State Styling */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+    transform: none;
+}
+
+/* Smooth transitions for button states */
+.btn {
+    transition: all 0.3s ease;
+}
+
+/* Activity loading animation */
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
 }

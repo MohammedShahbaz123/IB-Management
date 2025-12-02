@@ -184,39 +184,39 @@ const ROLE_PERMISSIONS = {
     }
 },
     inventory_manager: {
-        name: 'Inventory Manager',
-        description: 'Focus on stock management, suppliers, and product catalog',
-        permissions: {
-            // Staff Management
-            staff: ['view'],
-            // Business Management
-            business: ['view'],
-            // Inventory Management
-            products: ['create', 'view', 'edit', 'delete', 'categories'],
-            inventory: ['view', 'adjust', 'transfer', 'count'],
-            suppliers: ['create', 'view', 'edit', 'delete'],
-            categories: ['create', 'view', 'edit', 'delete'],
-            // Sales & Billing
-            sales: ['view'],
-            customers: ['view'],
-            invoices: ['view'],
-            quotes: ['view'],
-            // Purchases
-            purchases: ['create', 'view', 'edit', 'orders'],
-            vendors: ['create', 'view', 'edit'],
-            // Expenses
-            expenses: ['view'],
-            expense_categories: ['view'],
-            // Financial
-            payments: ['view'],
-            taxes: ['view'],
-            // Reports & Analytics
-            reports: ['inventory'],
-            analytics: ['view'],
-            // System
-            settings: ['view']
-        }
-    },
+    name: 'Inventory Manager',
+    description: 'Focus on stock management, suppliers, and product catalog',
+    permissions: {
+        // Staff Management - LIMITED
+        staff: ['view'],
+        // Business Management - LIMITED (NO CREATE ACCESS)
+        business: ['view'], // No 'create' permission
+        // Inventory Management - FULL ACCESS
+        products: ['create', 'view', 'edit', 'delete', 'categories'],
+        inventory: ['view', 'adjust', 'transfer', 'count'],
+        suppliers: ['create', 'view', 'edit', 'delete'],
+        categories: ['create', 'view', 'edit', 'delete'],
+        // Sales & Billing - LIMITED (view only)
+        sales: ['view'],
+        customers: ['view'], 
+        invoices: ['view'],
+        quotes: ['view'],
+        // Purchases - FULL ACCESS
+        purchases: ['create', 'view', 'edit', 'orders'],
+        vendors: ['create', 'view', 'edit'],
+        // Expenses - LIMITED (view only)
+        expenses: ['view'],
+        expense_categories: ['view'],
+        // Financial - LIMITED (view only)
+        payments: ['view'],
+        taxes: ['view'],
+        // Reports & Analytics - LIMITED
+        reports: ['view'],
+        analytics: ['view'],
+        // System - LIMITED
+        settings: ['view']
+    }
+},
     accountant: {
         name: 'Accountant',
         description: 'Financial management, expenses, and reporting',
@@ -354,6 +354,96 @@ const ROLE_PERMISSIONS = {
         }
     }
 };
+
+// ENHANCED: Direct navigation hiding with multiple strategies
+function applyDirectNavigationHiding() {
+    console.log('🎯 Applying direct navigation hiding...');
+    
+    if (!currentUser || !currentUser.role) {
+        console.warn('⚠️ No user or role for navigation hiding');
+        return;
+    }
+    
+    const role = currentUser.role;
+    console.log(`👤 Applying navigation restrictions for: ${role}`);
+    
+    // Define what each role should see
+    const roleNavigation = {
+        owner:['overview','inventory','parties','sales','purchases','expenses','reports','businesses','staff','settings'],
+        inventory_manager: ['overview', 'inventory', 'products', 'purchases', 'parties','reports'],
+        salesman: ['overview', 'sales', 'customers', 'parties'],
+        cashier: ['overview', 'sales'],
+        staff: ['overview', 'sales', 'inventory'],
+        viewer: ['overview']
+    };
+    
+    const allowedPages = roleNavigation[role] || ['overview'];
+    console.log(`✅ ${role} can access:`, allowedPages);
+    
+    // Get all navigation items using multiple selectors
+    const allNavItems = document.querySelectorAll(`
+        .sidebar-menu a[data-page],
+        .nav-item[data-page], 
+        .menu-item[data-page],
+        [data-page],
+        .nav-link,
+        .menu-link,
+        .sidebar-menu li,
+        .navigation a
+    `);
+    
+    let hiddenCount = 0;
+    let visibleCount = 0;
+    
+    allNavItems.forEach(item => {
+        let pageName = null;
+        
+        // Try different ways to identify the page
+        if (item.hasAttribute('data-page')) {
+            pageName = item.getAttribute('data-page');
+        } else if (item.getAttribute('href')) {
+            const href = item.getAttribute('href');
+            pageName = href.split('/').pop() || href.split('#').pop();
+        } else if (item.textContent) {
+            // Use text content as fallback
+            const text = item.textContent.toLowerCase().trim();
+            const pageMap = {
+                'dashboard': 'overview',
+                'inventory': 'inventory', 
+                'sales': 'sales',
+                'customers': 'customers',
+                'parties': 'parties',
+                'purchases': 'purchases',
+                'expenses': 'expenses',
+                'reports': 'reports',
+                'staff': 'staff',
+                'settings': 'settings'
+            };
+            pageName = pageMap[text];
+        }
+        
+        if (!pageName) {
+            return; // Skip if we can't identify the page
+        }
+        
+        // Check if this page is allowed
+        const isAllowed = allowedPages.includes(pageName);
+        
+        if (isAllowed) {
+            item.style.display = 'flex';
+            item.classList.remove('d-none');
+            visibleCount++;
+            console.log(`✅ Showing: ${pageName}`);
+        } else {
+            item.style.display = 'none';
+            item.classList.add('d-none');
+            hiddenCount++;
+            console.log(`🚫 Hiding: ${pageName}`);
+        }
+    });
+    
+    console.log(`📊 Direct hiding complete: ${visibleCount} visible, ${hiddenCount} hidden`);
+}
 
 // Display role permissions reference
 function displayRolePermissions() {
@@ -499,70 +589,335 @@ function formatPermissionName(permission) {
 
 // Apply role-based access control
 function applyRoleBasedAccess() {
-    console.log('🔐 Applying role-based access control...');
+    console.log('🔐 APPLYING COMPREHENSIVE ROLE-BASED ACCESS CONTROL...');
     
     if (!currentUser || !currentBusiness) {
-        console.warn('⚠️ No user or business for access control');
+        console.warn('⚠️ No user or business context');
         return;
     }
     
-    console.log('👤 Current user role:', currentUser.role);
-    console.log('🏢 Current business:', currentBusiness.name);
+    console.log('👤 User:', currentUser.email);
+    console.log('🎯 Role:', currentUser.role);
+    console.log('🏢 Business:', currentBusiness.name);
     
-    // Apply to navigation menu
-    applyNavigationRestrictions();
+    // Apply multiple hiding strategies for maximum coverage
+    applyDirectNavigationHiding(); // Primary method - most reliable
+    applyNavigationRestrictions(); // Secondary method - permission-based
+    applyRoleBasedUI();           // UI elements
     
-    // Apply to action buttons
-    applyActionButtonRestrictions();
+    // Update UI based on current permissions
+    updateUIForCurrentRole();
     
-    // Apply to page content
-    applyContentRestrictions();
+    console.log('✅ ACCESS CONTROL COMPLETE');
+    
+    // Show what's accessible for debugging
+    setTimeout(() => {
+        const visibleItems = document.querySelectorAll('.sidebar-menu a[data-page]');
+        const visiblePages = Array.from(visibleItems)
+            .filter(item => item.style.display !== 'none')
+            .map(item => item.getAttribute('data-page'));
+        
+        console.log('📋 Final accessible pages:', visiblePages);
+    }, 1000);
+}
+
+// Update UI to reflect current role
+function updateUIForCurrentRole() {
+    // Show current role in UI if element exists
+    const roleIndicator = document.getElementById('current-role');
+    if (roleIndicator) {
+        const roleInfo = ROLE_PERMISSIONS[currentUser.role] || ROLE_PERMISSIONS.viewer;
+        roleIndicator.textContent = roleInfo.name;
+        roleIndicator.className = `badge badge-${getRoleBadgeColor(currentUser.role)}`;
+    }
+    
+    // Update page title or header to show restricted access
+    if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
+        const pageHeader = document.querySelector('.page-header h1');
+        if (pageHeader) {
+            pageHeader.innerHTML += ` <small class="text-muted">(${ROLE_PERMISSIONS[currentUser.role]?.name} View)</small>`;
+        }
+    }
+}
+
+// Enhanced helper function to hide elements by ID, class, or selector
+function hideElementById(identifier) {
+    // If it starts with #, it's an ID
+    if (identifier.startsWith('#')) {
+        const element = document.getElementById(identifier.substring(1));
+        if (element) {
+            element.style.display = 'none';
+            element.classList.add('d-none');
+        }
+    } 
+    // If it starts with ., it's a class
+    else if (identifier.startsWith('.')) {
+        const elements = document.querySelectorAll(identifier);
+        elements.forEach(element => {
+            element.style.display = 'none';
+            element.classList.add('d-none');
+        });
+    }
+    // Otherwise, try as selector
+    else {
+        const elements = document.querySelectorAll(identifier);
+        elements.forEach(element => {
+            element.style.display = 'none';
+            element.classList.add('d-none');
+        });
+    }
 }
 
 function applyContentRestrictions() {
+    console.log('📄 Applying content restrictions...');
+    
     // Hide entire sections based on permissions
     if (!hasPermission('reports', 'view')) {
-        const reportsSection = document.getElementById('reports-section');
-        if (reportsSection) {
-            reportsSection.style.display = 'none';
-            console.log('🚫 Reports section hidden');
-        }
+        hideElementById('reports-section');
+        hideElementById('reports-tab');
+        hideElementById('reports-panel');
+        console.log('🚫 Reports section hidden');
     }
     
     if (!hasPermission('analytics', 'view')) {
-        const analyticsSection = document.getElementById('analytics-section');
-        if (analyticsSection) {
-            analyticsSection.style.display = 'none';
-            console.log('🚫 Analytics section hidden');
-        }
+        hideElementById('analytics-section');
+        hideElementById('analytics-tab');
+        hideElementById('analytics-panel');
+        console.log('🚫 Analytics section hidden');
+    }
+    
+    if (!hasPermission('staff', 'view')) {
+        hideElementById('staff-section');
+        hideElementById('staff-tab');
+        hideElementById('staff-panel');
+        console.log('🚫 Staff section hidden');
+    }
+    
+    if (!hasPermission('expenses', 'view')) {
+        hideElementById('expenses-section');
+        hideElementById('expenses-tab');
+        hideElementById('expenses-panel');
+        console.log('🚫 Expenses section hidden');
+    }
+    
+    if (!hasPermission('purchases', 'view')) {
+        hideElementById('purchases-section');
+        hideElementById('purchases-tab');
+        hideElementById('purchases-panel');
+        console.log('🚫 Purchases section hidden');
+    }
+    
+    if (!hasPermission('settings', 'view')) {
+        hideElementById('settings-section');
+        hideElementById('settings-tab');
+        hideElementById('settings-panel');
+        console.log('🚫 Settings section hidden');
     }
 }
 
+// Enhanced Navigation Control System
 function applyNavigationRestrictions() {
-    const menuItems = document.querySelectorAll('.sidebar-menu a[data-page]');
-    let visibleCount = 0;
+    console.log('🔐 Applying comprehensive navigation restrictions...');
     
+    if (!currentUser || !currentBusiness) {
+        console.warn('⚠️ No user or business for navigation restrictions');
+        return;
+    }
+    
+    // Define page permissions mapping
+    const pagePermissions = {
+        // Dashboard & Overview
+        'overview': { resource: 'business', action: 'view' },
+        
+        // Sales & Billing
+        'sales': { resource: 'sales', action: 'view' },
+        'customers': { resource: 'customers', action: 'view' },
+        'invoices': { resource: 'invoices', action: 'view' },
+        'quotes': { resource: 'quotes', action: 'view' },
+        
+        // Inventory Management
+        'inventory': { resource: 'products', action: 'view' },
+        'products': { resource: 'products', action: 'view' },
+        'categories': { resource: 'categories', action: 'view' },
+        'suppliers': { resource: 'suppliers', action: 'view' },
+        
+        // Purchases
+        'purchases': { resource: 'purchases', action: 'view' },
+        'vendors': { resource: 'vendors', action: 'view' },
+        
+        // Expenses
+        'expenses': { resource: 'expenses', action: 'view' },
+        'expense-categories': { resource: 'expense_categories', action: 'view' },
+        
+        // Financial
+        'payments': { resource: 'payments', action: 'view' },
+        'taxes': { resource: 'taxes', action: 'view' },
+        
+        // Reports & Analytics
+        'reports': { resource: 'reports', action: 'view' },
+        'analytics': { resource: 'analytics', action: 'view' },
+        
+        // Staff & Settings
+        'staff': { resource: 'staff', action: 'view' },
+        'settings': { resource: 'settings', action: 'view' },
+        'business-settings': { resource: 'business', action: 'settings' }
+    };
+
+    // Hide all navigation elements first, then show authorized ones
+    const menuItems = document.querySelectorAll('.sidebar-menu a[data-page], .nav-item[data-page], .menu-item[data-page]');
+    let visibleCount = 0;
+    let hiddenCount = 0;
+
     menuItems.forEach(menuItem => {
         const page = menuItem.getAttribute('data-page');
         
-        if (!canAccessPage(page)) {
-            menuItem.style.display = 'none';
-            console.log(`🚫 Hiding navigation: ${page}`);
-        } else {
+        if (!page) {
+            console.warn('⚠️ Menu item missing data-page attribute:', menuItem);
+            return;
+        }
+
+        const permission = pagePermissions[page];
+        
+        if (!permission) {
+            console.log(`ℹ️ No permission defined for page: ${page} - showing by default`);
+            menuItem.style.display = 'flex';
+            visibleCount++;
+            return;
+        }
+
+        if (canAccessPage(page)) {
             menuItem.style.display = 'flex';
             visibleCount++;
             console.log(`✅ Showing navigation: ${page}`);
+        } else {
+            menuItem.style.display = 'none';
+            hiddenCount++;
+            console.log(`🚫 Hiding navigation: ${page}`);
         }
     });
+
+    // Also check for navigation by ID or class
+    hideNavigationBySelectors();
     
-    console.log(`📊 Navigation: ${visibleCount} items visible`);
+    // 🔥 SPECIFIC FIX: Hide Create Business button for non-owners
+    hideCreateBusinessButton();
+    
+    console.log(`📊 Navigation Summary: ${visibleCount} visible, ${hiddenCount} hidden`);
 }
 
+// 🔥 NEW: Hide Create Business button specifically
+function hideCreateBusinessButton() {
+    console.log('🚫 Checking Create Business button visibility...');
+    
+    // Debug info
+    console.log('👤 Current User ID:', currentUser?.id);
+    console.log('🏢 Business Owner ID:', currentBusiness?.owner_id);
+    console.log('🔐 Is Owner:', currentBusiness?.owner_id === currentUser?.id);
+    console.log('🎯 User Role:', currentUser?.role);
+    
+    // ONLY hide for non-owners - OWNERS should see the button
+    const isOwner = currentBusiness?.owner_id === currentUser?.id;
+    
+    if (isOwner) {
+        console.log('✅ User is owner - SHOWING all Create Business buttons');
+        // Ensure all create business buttons are visible for owners
+        const createBusinessButtons = document.querySelectorAll(`
+            #create-business-btn,
+            .create-business-btn,
+            [data-action="create-business"],
+            [href*="create-business"],
+            .btn[onclick*="createBusiness"],
+            .btn[onclick*="showCreateBusinessModal"]
+        `);
+        
+        createBusinessButtons.forEach(button => {
+            button.style.display = 'flex';
+            button.classList.remove('d-none');
+            console.log('✅ Showing Create Business button for owner');
+        });
+        
+        return; // Exit early - don't hide anything for owners
+    }
+    
+    // Only execute the hiding logic for NON-owners
+    console.log('🚫 User is not owner - HIDING Create Business buttons');
+    
+    const createBusinessButtons = document.querySelectorAll(`
+        #create-business-btn,
+        .create-business-btn,
+        [data-action="create-business"],
+        [href*="create-business"],
+        .btn[onclick*="createBusiness"],
+        .btn[onclick*="showCreateBusinessModal"]
+    `);
+    
+    createBusinessButtons.forEach(button => {
+        button.style.display = 'none';
+        button.classList.add('d-none');
+        console.log('🚫 Hiding Create Business button for non-owner');
+    });
+    
+    // Also hide any "Add Business" or "New Business" buttons for non-owners
+    const addBusinessElements = document.querySelectorAll(`
+        #add-business-btn,
+        .add-business-btn,
+        [data-action="add-business"]
+    `);
+    
+    addBusinessElements.forEach(element => {
+        element.style.display = 'none';
+        element.classList.add('d-none');
+    });
+}
+
+// Additional navigation hiding by selectors
+function hideNavigationBySelectors() {
+    const selectorsToHide = [];
+    
+    // Define selectors based on permissions
+    if (!hasPermission('reports', 'view')) {
+        selectorsToHide.push('#reports-nav', '.reports-menu', '[href*="reports"]');
+    }
+    
+    if (!hasPermission('analytics', 'view')) {
+        selectorsToHide.push('#analytics-nav', '.analytics-menu', '[href*="analytics"]');
+    }
+    
+    if (!hasPermission('staff', 'view')) {
+        selectorsToHide.push('#staff-nav', '.staff-menu', '[href*="staff"]');
+    }
+    
+    if (!hasPermission('settings', 'view')) {
+        selectorsToHide.push('#settings-nav', '.settings-menu', '[href*="settings"]');
+    }
+    
+    if (!hasPermission('expenses', 'view')) {
+        selectorsToHide.push('#expenses-nav', '.expenses-menu', '[href*="expenses"]');
+    }
+    
+    if (!hasPermission('purchases', 'view')) {
+        selectorsToHide.push('#purchases-nav', '.purchases-menu', '[href*="purchases"]');
+    }
+    
+    // Apply hiding
+    selectorsToHide.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(element => {
+            element.style.display = 'none';
+            console.log(`🚫 Hiding element: ${selector}`);
+        });
+    });
+}
+
+
+
 function applyActionButtonRestrictions() {
-    // Add staff button
+    console.log('🔘 Applying action button restrictions...');
+    
+    // Staff management buttons
     const addStaffButton = document.getElementById('add-staff-btn');
     if (addStaffButton) {
-        if (currentBusiness?.owner_id === currentUser?.id || hasPermission('staff', 'create')) {
+        if (hasPermission('staff', 'create')) {
             addStaffButton.style.display = 'flex';
             console.log('✅ Add staff button shown');
         } else {
@@ -571,7 +926,7 @@ function applyActionButtonRestrictions() {
         }
     }
     
-    // Add product button
+    // Product management buttons
     const addProductButton = document.getElementById('add-product-btn');
     if (addProductButton) {
         if (hasPermission('products', 'create')) {
@@ -583,7 +938,7 @@ function applyActionButtonRestrictions() {
         }
     }
     
-    // Add sale button
+    // Sales buttons
     const addSaleButton = document.getElementById('add-sale-btn');
     if (addSaleButton) {
         if (hasPermission('sales', 'create')) {
@@ -594,7 +949,43 @@ function applyActionButtonRestrictions() {
             console.log('🚫 Add sale button hidden');
         }
     }
+    
+    // Purchase buttons
+    const addPurchaseButton = document.getElementById('add-purchase-btn');
+    if (addPurchaseButton) {
+        if (hasPermission('purchases', 'create')) {
+            addPurchaseButton.style.display = 'block';
+            console.log('✅ Add purchase button shown');
+        } else {
+            addPurchaseButton.style.display = 'none';
+            console.log('🚫 Add purchase button hidden');
+        }
+    }
+    
+    // Expense buttons
+    const addExpenseButton = document.getElementById('add-expense-btn');
+    if (addExpenseButton) {
+        if (hasPermission('expenses', 'create')) {
+            addExpenseButton.style.display = 'block';
+            console.log('✅ Add expense button shown');
+        } else {
+            addExpenseButton.style.display = 'none';
+            console.log('🚫 Add expense button hidden');
+        }
+    }
+    
+    // Report export buttons
+    const exportButtons = document.querySelectorAll('.export-btn, [data-action="export"]');
+    exportButtons.forEach(button => {
+        if (hasPermission('analytics', 'export')) {
+            button.style.display = 'inline-block';
+        } else {
+            button.style.display = 'none';
+        }
+    });
 }
+
+
 
 async function loadCurrentUserRole() {
     try {
@@ -626,12 +1017,12 @@ async function loadCurrentUserRole() {
             return 'owner';
         }
 
-        // 🔥 FIX: Check staff_roles by email (since staff might not have user_id linked yet)
+        // 🔥 FIX: Use email to find staff role (since staff_roles uses owner_id, not user_id)
         const { data: staffRole, error } = await supabase
             .from('staff_roles')
-            .select('role, staff_name, business_id, id')
+            .select('role, staff_name, business_id, id, owner_id')
             .eq('business_id', currentBusiness.id)
-            .eq('email', currentUser.email)  // Check by email instead of user_id
+            .eq('email', currentUser.email)
             .eq('is_active', true)
             .single();
 
@@ -709,7 +1100,7 @@ function loadStaffSession() {
 // Clean add staff member function
 async function addStaffMember(staffData) {
     try {
-        console.log('👤 Adding staff member:', staffData);
+        console.log('👤 Adding staff member with direct login capability:', staffData);
         
         if (!currentBusiness) {
             throw new Error('No business selected');
@@ -742,7 +1133,7 @@ async function addStaffMember(staffData) {
         // Check if staff already exists in this business by email
         const { data: existingStaff, error: checkError } = await supabase
             .from('staff_roles')
-            .select('id, email, staff_name, is_active')
+            .select('id, email, staff_name, is_active, owner_id')
             .eq('business_id', currentBusiness.id)
             .eq('email', staffData.email)
             .single();
@@ -761,7 +1152,7 @@ async function addStaffMember(staffData) {
                 .update({
                     role: staffData.role,
                     staff_name: staffData.name,
-                    owner_id: currentUser.id, // Update owner_id to current user
+                    owner_id: currentUser.id,
                     is_active: true,
                     status: 'active',
                     updated_at: new Date().toISOString()
@@ -773,34 +1164,28 @@ async function addStaffMember(staffData) {
             if (updateError) throw updateError;
             
             console.log('✅ Staff member reactivated:', updatedStaff);
+            
+            // Send staff invitation notification
+            await sendStaffInvitation(staffData.email, staffData.name, currentBusiness.name, staffData.role);
+            
             showNotification('Success', `${staffData.name} has been reactivated as ${staffData.role}`, 'success');
             return updatedStaff;
         }
 
-        // If error is not "no rows" error, log it but continue
-        if (checkError && checkError.code !== 'PGRST116') {
-            console.warn('⚠️ Check existing staff warning:', checkError);
-        }
-
-        // Create new staff record with proper business_id and owner_id
+        // Create new staff record
         const staffRecord = {
             email: staffData.email,
             role: staffData.role,
-            business_id: currentBusiness.id, // The business where staff is added
-            owner_id: currentUser.id,        // The user who created/invited the staff
+            business_id: currentBusiness.id,
+            owner_id: currentUser.id,
             staff_name: staffData.name,
             is_active: true,
-            status: 'Active',
+            status: 'active',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
 
-        console.log('📝 Creating staff record with:', {
-            business_id: staffRecord.business_id,
-            owner_id: staffRecord.owner_id,
-            email: staffRecord.email,
-            role: staffRecord.role
-        });
+        console.log('📝 Creating staff record with:', staffRecord);
 
         const { data: staffRole, error } = await supabase
             .from('staff_roles')
@@ -811,15 +1196,8 @@ async function addStaffMember(staffData) {
         if (error) {
             console.error('❌ Database error:', error);
             
-            // Handle specific constraint violations
             if (error.code === '23505') {
-                if (error.message.includes('staff_roles_business_id_email_key')) {
-                    throw new Error('This staff member already exists in your business');
-                } else if (error.message.includes('staff_roles_business_id_owner_id_key')) {
-                    throw new Error('This user is already a staff member in your business');
-                } else {
-                    throw new Error('Staff member already exists with these details');
-                }
+                throw new Error('This staff member already exists in your business');
             }
             throw error;
         }
@@ -830,21 +1208,39 @@ async function addStaffMember(staffData) {
 
         console.log('✅ Staff member added successfully:', staffRole);
         
+        // Send staff invitation
+        await sendStaffInvitation(staffData.email, staffData.name, currentBusiness.name, staffData.role);
+        
         // Clear staff cache
         clearBusinessData('staff_roles');
-        
-        // Show success message
-        showNotification(
-            'Staff Added Successfully', 
-            `${staffData.name} (${staffData.email}) has been added as ${staffData.role} to ${currentBusiness.name}.`,
-            'success'
-        );
         
         return staffRole;
 
     } catch (error) {
         console.error('❌ Error adding staff member:', error);
         throw error;
+    }
+}
+
+// Send staff invitation with login instructions
+async function sendStaffInvitation(email, staffName, businessName, role) {
+    try {
+        console.log(`📧 Sending invitation to ${email} for business ${businessName}`);
+        
+        // Show notification with login instructions
+        showNotification(
+            'Staff Invited Successfully', 
+            `${staffName} has been added as ${role} to ${businessName}. They can now login directly with their email address.`,
+            'success',
+            8000
+        );
+        
+        // Optional: You can implement email sending here
+        // await sendInvitationEmail(email, staffName, businessName, role);
+        
+    } catch (error) {
+        console.warn('⚠️ Could not send invitation:', error);
+        // Don't throw error - staff was still created successfully
     }
 }
 
@@ -894,19 +1290,62 @@ async function loadStaffMembers() {
             return;
         }
 
-        console.log('🏢 Loading staff for business:', currentBusiness.id);
+        console.log('🏢 Loading staff for business:', currentBusiness.id, currentBusiness.name);
 
-        // Use business-aware data loading
-        const staffRoles = await getBusinessData('staff_roles', {
-            cacheKey: 'staff_members'
-        });
+        // 🔥 FIX: Use simple query without complex joins
+        const { data: staffRoles, error } = await supabase
+            .from('staff_roles')
+            .select('id, business_id, owner_id, email, staff_name, role, is_active, status, created_at, updated_at')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
 
-        console.log('✅ Staff roles loaded:', staffRoles.length);
-        processStaffData(staffRoles);
+        if (error) {
+            console.error('❌ Error loading staff members:', error);
+            
+            // If it's a schema error, try alternative approach
+            if (error.message.includes('relationship') || error.message.includes('schema')) {
+                console.log('🔄 Trying alternative staff loading method...');
+                return await loadStaffMembersAlternative();
+            }
+            
+            showNotification('Error', 'Failed to load staff members. Please refresh the page.', 'error');
+            updateStaffUI([]);
+            return;
+        }
+
+        console.log('✅ Staff roles loaded:', staffRoles?.length || 0, staffRoles);
+        processStaffData(staffRoles || []);
         
     } catch (error) {
         console.error('❌ Error loading staff members:', error);
         showNotification('Error', 'Failed to load staff members. Please refresh the page.', 'error');
+        updateStaffUI([]);
+    }
+}
+
+// Alternative staff loading method
+async function loadStaffMembersAlternative() {
+    try {
+        console.log('🔍 Using alternative staff loading method');
+        
+        const { data: staffRoles, error } = await supabase
+            .from('staff_roles')
+            .select('*')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('❌ Alternative staff loading failed:', error);
+            updateStaffUI([]);
+            return;
+        }
+
+        processStaffData(staffRoles || []);
+        
+    } catch (error) {
+        console.error('❌ Error in alternative staff loading:', error);
         updateStaffUI([]);
     }
 }
@@ -1194,28 +1633,257 @@ function canAccessPage(page) {
     
     // Page to permission mapping
     const pagePermissions = {
+        // Dashboard
         'overview': { resource: 'business', action: 'view' },
+        
+        // Sales
         'sales': { resource: 'sales', action: 'view' },
-        'inventory': { resource: 'products', action: 'view' },
         'customers': { resource: 'customers', action: 'view' },
-        'staff': { resource: 'staff', action: 'view' },
-        'reports': { resource: 'reports', action: 'view' },
-        'settings': { resource: 'settings', action: 'view' },
-        'parties': { resource: 'customers', action: 'view' },
+        'invoices': { resource: 'invoices', action: 'view' },
+        'quotes': { resource: 'quotes', action: 'view' },
+        
+        // Inventory
+        'inventory': { resource: 'products', action: 'view' },
+        'products': { resource: 'products', action: 'view' },
+        'categories': { resource: 'categories', action: 'view' },
+        'suppliers': { resource: 'suppliers', action: 'view' },
+        
+        // Purchases
         'purchases': { resource: 'purchases', action: 'view' },
+        'vendors': { resource: 'vendors', action: 'view' },
+        
+        // Expenses
         'expenses': { resource: 'expenses', action: 'view' },
-        'business': { resource: 'business', action: 'view' }
+        'expense-categories': { resource: 'expense_categories', action: 'view' },
+        
+        // Financial
+        'payments': { resource: 'payments', action: 'view' },
+        'taxes': { resource: 'taxes', action: 'view' },
+        
+        // Reports
+        'reports': { resource: 'reports', action: 'view' },
+        'analytics': { resource: 'analytics', action: 'view' },
+        
+        // Administration
+        'staff': { resource: 'staff', action: 'view' },
+        'settings': { resource: 'settings', action: 'view' },
+        'business-settings': { resource: 'business', action: 'settings' }
     };
 
     const permission = pagePermissions[page];
     if (!permission) {
-        console.log('✅ Page has no permission requirements:', page);
-        return true; // No specific permission required
+        console.log(`✅ Page ${page} has no permission requirements - allowing access`);
+        return true;
     }
 
     const canAccess = hasPermission(permission.resource, permission.action);
-    console.log(`🔐 Page access result: ${page} -> ${canAccess}`);
+    console.log(`🔐 Page access result: ${page} -> ${canAccess ? 'ALLOWED' : 'DENIED'}`);
     return canAccess;
+}
+
+// Comprehensive UI element control based on roles
+function applyRoleBasedUI() {
+    console.log('🎨 Applying role-based UI restrictions...');
+    
+    if (!currentUser || !currentBusiness) {
+        console.warn('⚠️ No user or business for UI restrictions');
+        return;
+    }
+    
+    // Control action buttons
+    applyActionButtonRestrictions();
+    
+    // Control page sections
+    applyContentRestrictions();
+    
+    // Control dashboard widgets
+    applyDashboardRestrictions();
+    
+    // Control form elements
+    applyFormRestrictions();
+}
+
+// Form element restrictions
+function applyFormRestrictions() {
+    console.log('📝 Applying form restrictions...');
+    
+    // Disable form fields based on permissions
+    const editableFields = document.querySelectorAll('[contenteditable="true"], input:not([readonly]), select:not([disabled])');
+    
+    editableFields.forEach(field => {
+        const formSection = field.closest('.form-section, .tab-pane, [data-resource]');
+        if (formSection) {
+            const resource = formSection.getAttribute('data-resource');
+            if (resource && !hasPermission(resource, 'edit')) {
+                field.setAttribute('readonly', true);
+                field.setAttribute('disabled', true);
+            }
+        }
+    });
+}
+
+// Dashboard restrictions
+function applyDashboardRestrictions() {
+    console.log('📊 Applying dashboard restrictions...');
+    
+    if (!currentUser || !currentBusiness) {
+        console.warn('⚠️ No user or business for dashboard restrictions');
+        return;
+    }
+    
+    const userRole = currentUser.role;
+    console.log(`🎯 Applying dashboard restrictions for: ${userRole}`);
+    
+    // Financial widgets - hide for inventory_manager
+    if (!hasPermission('payments', 'view') || userRole === 'inventory_manager') {
+        hideElementById('revenue-widget');
+        hideElementById('profit-widget');
+        hideElementById('tax-widget');
+        hideElementById('total-sales-widget');
+        hideElementById('total-revenue-widget');
+        console.log('🚫 Financial widgets hidden');
+    }
+    
+    // Inventory widgets
+    if (!hasPermission('inventory', 'view')) {
+        hideElementById('stock-widget');
+        hideElementById('low-stock-widget');
+        console.log('🚫 Inventory widgets hidden');
+    }
+    
+    // Sales widgets - hide for inventory_manager
+    if (!hasPermission('sales', 'view') || userRole === 'inventory_manager') {
+        hideElementById('sales-chart');
+        hideElementById('recent-sales');
+        hideElementById('quick-sale-btn');
+        hideElementById('export-sales-btn');
+        hideElementById('financial-summary');
+        hideElementById('performance-analytics');
+        console.log('🚫 Sales widgets hidden');
+    }
+    
+    // 🔥 SPECIFIC FIX: Hide all sales-related elements in overview
+    hideSalesElementsInOverview();
+}
+
+// 🔥 NEW: Hide specific sales elements in overview/dashboard
+function hideSalesElementsInOverview() {
+    console.log('🎯 Hiding sales elements in overview...');
+    
+    // Only apply to inventory_manager
+    if (currentUser.role !== 'inventory_manager') {
+        return;
+    }
+    
+    // Hide Total Sales elements
+    const totalSalesElements = document.querySelectorAll(`
+        .sales-card,
+        .revenue-card,
+        [data-widget="total-sales"],
+        [data-metric="sales"],
+        .sales-total,
+        .revenue-total
+    `);
+    
+    totalSalesElements.forEach(element => {
+        element.style.display = 'none';
+        element.classList.add('d-none');
+        console.log('🚫 Hiding Total Sales element');
+    });
+    
+    // Hide Total Revenue elements
+    const totalRevenueElements = document.querySelectorAll(`
+        #total-revenue,
+        .total-revenue,
+        [data-widget="total-revenue"],
+        [data-metric="revenue"],
+        .revenue-widget
+    `);
+    
+    totalRevenueElements.forEach(element => {
+        element.style.display = 'none';
+        element.classList.add('d-none');
+        console.log('🚫 Hiding Total Revenue element');
+    });
+    
+    // Hide Quick Sale buttons
+    const quickSaleButtons = document.querySelectorAll(`
+        #quick-sale-btn,
+        .quick-sale-btn,
+        [data-action="quick-sale"],
+        .btn[onclick*="quickSale"],
+        .btn[onclick*="createSale"]
+    `);
+    
+    quickSaleButtons.forEach(button => {
+        button.style.display = 'none';
+        button.classList.add('d-none');
+        console.log('🚫 Hiding Quick Sale button');
+    });
+    
+    // Hide Export buttons
+    const exportButtons = document.querySelectorAll(`
+        #export-btn,
+        .export-btn,
+        [data-action="export"],
+        .btn[onclick*="export"],
+        .btn-download
+    `);
+    
+    exportButtons.forEach(button => {
+        button.style.display = 'none';
+        button.classList.add('d-none');
+        console.log('🚫 Hiding Export button');
+    });
+    
+    // Hide Financial Summary sections
+    const financialSections = document.querySelectorAll(`
+        #financial-summary,
+        .financial-summary-card,
+        [data-section="financial"],
+        .finance-section,
+        .revenue-section
+    `);
+    
+    financialSections.forEach(section => {
+        section.style.display = 'none';
+        section.classList.add('d-none');
+        console.log('🚫 Hiding Financial Summary section');
+    });
+    
+    // Hide Performance Analytics charts
+    const analyticsCharts = document.querySelectorAll(`
+        #performance-analytics,
+        .Performance-analytics-card,
+        [data-chart="performance"],
+        .analytics-chart,
+        .sales-chart,
+        .revenue-chart,
+        .chart-container
+    `);
+    
+    analyticsCharts.forEach(chart => {
+        chart.style.display = 'none';
+        chart.classList.add('d-none');
+        console.log('🚫 Hiding Performance Analytics chart');
+    });
+    
+    // Hide any elements containing sales/revenue text
+    const salesTextElements = document.querySelectorAll(`
+        .card, .widget, .metric, .stat
+    `);
+    
+    salesTextElements.forEach(element => {
+        const text = element.textContent?.toLowerCase() || '';
+        if (text.includes('sales') || text.includes('revenue') || text.includes('profit')) {
+            // Check if it's inventory-related (keep those)
+            if (!text.includes('inventory') && !text.includes('stock') && !text.includes('purchase')) {
+                element.style.display = 'none';
+                element.classList.add('d-none');
+                console.log('🚫 Hiding sales-related element:', text.substring(0, 50));
+            }
+        }
+    });
 }
 
 function hideAddStaffModal() {
@@ -1423,12 +2091,107 @@ function debounce(func, wait) {
     };
 }
 
-// Initialize when DOM is ready
+// Monitor and reapply permissions when DOM changes
+function setupPermissionMonitor() {
+    // Reapply permissions when new content is loaded
+    const observer = new MutationObserver((mutations) => {
+        let shouldReapply = false;
+        
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                shouldReapply = true;
+            }
+        });
+        
+        if (shouldReapply) {
+            setTimeout(() => {
+                applyRoleBasedAccess();
+            }, 100);
+        }
+    });
+    
+    // Start observing
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // Also reapply on route changes
+    window.addEventListener('hashchange', applyRoleBasedAccess);
+    window.addEventListener('popstate', applyRoleBasedAccess);
+}
+
+// Initialize everything when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🏁 Staff management ready to initialize');
+    console.log('🏁 Initializing app with page persistence...');
+    
+    // Load saved state first
+    const savedState = loadAppState();
+    
+    // Wait for user data to load
+    setTimeout(() => {
+        applyRoleBasedAccess();
+        setupPermissionMonitor();
+        
+        // Setup navigation after permissions are applied
+        setupNavigation();
+        
+        // Save state periodically
+        setInterval(saveAppState, 30000); // Every 30 seconds
+        
+    }, 500);
 });
 
+// Also apply when user changes business - but don't reset page
+function onBusinessChange() {
+    setTimeout(() => {
+        applyRoleBasedAccess();
+        // Don't change the current page, just update permissions
+        const currentPage = sessionStorage.getItem('currentPage') || 'overview';
+        showDashboardPage(currentPage);
+    }, 300);
+}
+
 console.log('✅ Enhanced staff management functions loaded successfully');
+
+// Debug permission system
+function debugPermissions() {
+    console.group('🔐 Permission Debug Information');
+    console.log('👤 Current User:', currentUser);
+    console.log('🎯 User Role:', currentUser?.role);
+    console.log('🏢 Current Business:', currentBusiness);
+    console.log('🔑 Is Business Owner:', currentBusiness?.owner_id === currentUser?.id);
+    
+    // Test common permissions
+    const testPermissions = [
+        ['staff', 'create'],
+        ['products', 'create'],
+        ['sales', 'create'],
+        ['reports', 'view'],
+        ['settings', 'view']
+    ];
+    
+    testPermissions.forEach(([resource, action]) => {
+        console.log(`🔐 ${resource}.${action}:`, hasPermission(resource, action));
+    });
+    
+    console.groupEnd();
+}
+
+// Check what pages are accessible
+function listAccessiblePages() {
+    const pages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports', 'settings', 'purchases', 'expenses'];
+    
+    console.group('📄 Accessible Pages');
+    pages.forEach(page => {
+        console.log(`${page}: ${canAccessPage(page) ? '✅' : '❌'}`);
+    });
+    console.groupEnd();
+}
+
+// Make debugging functions available globally
+window.debugPermissions = debugPermissions;
+window.listAccessiblePages = listAccessiblePages;
 
 // Export functions for global access
 window.initializeStaffManagement = initializeStaffManagement;

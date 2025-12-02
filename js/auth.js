@@ -1,3 +1,6 @@
+let isCompletingProfile = false;
+let isCreatingBusiness = false;
+
 // Authentication Functions
 async function initializeApp() {
     if (appInitialized) {
@@ -24,6 +27,10 @@ async function initializeApp() {
                 }, 300);
             }
             initialLoadComplete = true;
+            const partiesPage = document.getElementById('parties-page');
+    if (partiesPage && !partiesPage.classList.contains('d-none')) {
+        initializePartiesSystem();
+    }
         }, 200);
         
         console.log('App initialized successfully');
@@ -41,32 +48,48 @@ async function initializeApp() {
 }
 
 function setupPageVisibilityHandler() {
-    const setupVisibilityHandlers = () => {
-        if (!initialLoadComplete) {
-            setTimeout(setupVisibilityHandlers, 100);
-            return;
-        }
-        
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                console.log('Page is now visible - restoring state');
-                restoreApplicationState();
-            } else {
-                saveCurrentState();
-            }
-        });
-        
-        window.addEventListener('focus', function() {
-            console.log('Window focused - restoring state');
-            restoreApplicationState();
-        });
-        
-        window.addEventListener('beforeunload', function() {
-            saveCurrentState();
-        });
-    };
+    let isTabSwitch = false;
     
-    setupVisibilityHandlers();
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            // Tab switched away - just save state, don't change anything
+            isTabSwitch = true;
+            saveCurrentState();
+        } else {
+            // Tab switched back - restore UI but don't reload
+            if (isTabSwitch) {
+                console.log('🔍 Tab focused - restoring UI state without reload');
+                restoreUIState();
+                isTabSwitch = false;
+            }
+        }
+    });
+    
+    // Prevent reloads on focus
+    window.addEventListener('focus', function() {
+        console.log('🎯 Window focused - maintaining current state');
+        // Just update any real-time data, don't reload pages
+        updateRealtimeData();
+    });
+}
+
+function updateRealtimeData() {
+    // Only update data that changes frequently
+    // Don't reload entire pages
+    if (currentPage === 'overview') {
+        loadDashboardData(); // This should be lightweight
+    }
+}
+
+function restoreUIState() {
+    // Just update the UI elements that might need refreshing
+    // but don't reload the entire page content
+    updateDashboardMetrics();
+    
+    // Update any real-time indicators
+    if (window.updateRealtimeIndicators) {
+        updateRealtimeIndicators();
+    }
 }
 
 function saveCurrentState() {
@@ -85,11 +108,19 @@ function saveCurrentState() {
 
 async function restoreApplicationState() {
     try {
-        console.log('🔄 Restoring application state...');
+        console.log('🔄 Restoring application state with staff support...');
         const { data } = await supabase.auth.getSession();
         
         if (data.session && data.session.user) {
             currentUser = data.session.user;
+            
+            // Check for staff session first
+            const staffSession = loadStaffSession();
+            if (staffSession && staffSession.user_id === currentUser.id) {
+                console.log('🔍 Restoring staff session on visibility change...');
+                await restoreStaffSession(staffSession);
+                return;
+            }
             
             if (dashboard.classList.contains('d-none')) {
                 console.log('🔄 Restoring dashboard for logged-in user');
@@ -180,9 +211,32 @@ function setupEventListeners() {
     console.log('Event listeners setup complete');
 }
 
+// Smart navigation that maintains state
+function setupNavigation() {
+    console.log('🔗 Setting up smart navigation...');
+    
+    // Use event delegation for navigation
+    document.addEventListener('click', function(e) {
+        const navLink = e.target.closest('.sidebar-menu a[data-page]');
+        if (navLink) {
+            e.preventDefault();
+            const page = navLink.getAttribute('data-page');
+            showDashboardPage(page);
+        }
+    });
+    
+    // Handle browser back/forward
+    window.addEventListener('popstate', function() {
+        const page = window.location.hash.replace('#', '') || 'overview';
+        if (page !== currentPage) {
+            showDashboardPage(page);
+        }
+    });
+}
+
 async function checkAuthStatus() {
     try {
-        console.log('🔐 Checking auth status...');
+        console.log('🔐 Checking auth status with staff session support...');
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -203,19 +257,16 @@ async function checkAuthStatus() {
         if (data.session && data.session.user) {
             currentUser = data.session.user;
             
-            // 🔥 CRITICAL: Load businesses BEFORE showing dashboard
-            console.log('🔄 Loading user businesses before dashboard...');
-            await loadUserBusinesses();
-            await setActiveBusinessOnLoad();
-            
-            console.log('✅ User authenticated:', currentUser.email);
-            
-            const lastSection = localStorage.getItem(STATE_KEYS.LAST_VISIBLE_SECTION);
-            if (lastSection === 'dashboard') {
-                await showDashboard();
+            // Check for existing staff session first
+            const staffSession = loadStaffSession();
+            if (staffSession && staffSession.user_id === currentUser.id) {
+                console.log('🔍 Staff session found, restoring...');
+                await restoreStaffSession(staffSession);
             } else {
-                await showDashboard();
+                // Regular user flow
+                await checkUserBusinessesAndProfile();
             }
+            
         } else {
             console.log('❌ No active session');
             currentUser = null;
@@ -302,16 +353,9 @@ async function handleSignup(e) {
     console.log('🚀 Starting signup process...');
     
     const email = document.getElementById('signup-email').value;
-    const businessName = document.getElementById('business-name').value;
     
     if (!isValidEmail(email)) {
         showNotification('Invalid Email', 'Please enter a valid email address.', 'error');
-        return;
-    }
-    
-    if (!businessName.trim()) {
-        showNotification('Business Name Required', 'Please enter your business name to continue.', 'error');
-        document.getElementById('business-name').focus();
         return;
     }
     
@@ -360,7 +404,6 @@ async function handleSignup(e) {
                 email: email,
                 options: {
                     data: {
-                        business_name: businessName,
                         user_type: 'owner',
                         is_new_user: true
                     },
@@ -383,7 +426,7 @@ async function handleSignup(e) {
             console.log('✅ Signup OTP sent successfully:', signupData);
             
             isNewUser = true;
-            currentUser = { email, businessName };
+            currentUser = { email };
             
             showOtpPage(email);
             showNotification('Almost There!', `We sent a verification code to ${email}. Please check your inbox to complete signup.`, 'success', 6000);
@@ -418,11 +461,11 @@ async function handleSignup(e) {
     }
 }
 
-// Update login form to handle staff emails
+// Enhanced login function with direct staff login
 async function handleLogin(e) {
     if (e) e.preventDefault();
     
-    const email = document.getElementById('login-email').value;
+    const email = document.getElementById('login-email').value.trim().toLowerCase();
     
     if (!isValidEmail(email)) {
         showNotification('Invalid Email', 'Please enter a valid email address.', 'error');
@@ -438,17 +481,17 @@ async function handleLogin(e) {
     try {
         console.log('🔐 Checking user type for:', email);
         
-        // First check if user is a staff member
+        // First check if user is a staff member in any business
         const staffBusinesses = await checkStaffMembership(email);
         
         if (staffBusinesses.length > 0) {
-            // User is a staff member - proceed with staff login
-            console.log('👥 Staff member detected, proceeding with login');
-            await handleStaffLogin(email);
+            // User is a staff member - proceed with direct staff login
+            console.log('👥 Staff member detected, proceeding with direct login');
+            await handleDirectStaffLogin(email, staffBusinesses);
             return;
         }
         
-        // Regular user flow (existing code)
+        // Regular user flow
         console.log('👤 Regular user, checking existence...');
         
         const { data, error } = await supabase.auth.signInWithOtp({
@@ -481,21 +524,8 @@ async function handleLogin(e) {
             setTimeout(() => {
                 showSignup();
                 document.getElementById('signup-email').value = email;
-                setTimeout(() => {
-                    document.getElementById('business-name').focus();
-                }, 300);
             }, 2000);
             
-            return;
-        }
-        
-        if (error.message?.includes('rate limit') || error.message?.includes('too many requests')) {
-            showNotification('Too Many Attempts', 'Please wait a few minutes before requesting another OTP.', 'warning', 6000);
-            return;
-        }
-        
-        if (error.message?.includes('network') || error.message?.includes('fetch')) {
-            showNotification('Connection Error', 'Please check your internet connection and try again.', 'error');
             return;
         }
         
@@ -510,8 +540,8 @@ async function handleLogin(e) {
             userMessage = 'Please enter a valid email address.';
         } else if (error.message?.includes('disabled')) {
             userMessage = 'This account has been disabled. Please contact support.';
-        } else if (error.message) {
-            userMessage = 'We encountered an issue. Please try again in a moment.';
+        } else if (error.message?.includes('rate limit')) {
+            userMessage = 'Too many attempts. Please wait a few minutes.';
         }
         
         showNotification('Login Issue', userMessage, 'error');
@@ -519,6 +549,95 @@ async function handleLogin(e) {
         setLoadingState(loginText, loginLoading, loginSubmit, false);
     }
 }
+
+// Direct staff login - creates account automatically if needed
+async function handleDirectStaffLogin(email, staffBusinesses) {
+    try {
+        console.log('🔐 Handling direct staff login for:', email);
+        
+        currentEmail = email;
+        
+        // Check if staff member already has a Supabase auth account
+        try {
+            const { data: existingUser, error: userCheckError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('email', email)
+                .single();
+
+            if (!userCheckError && existingUser) {
+                // Staff member has existing account - send OTP normally
+                console.log('✅ Staff member has existing account, sending OTP');
+                
+                const { data, error } = await supabase.auth.signInWithOtp({
+                    email: email,
+                    options: {
+                        shouldCreateUser: false
+                    }
+                });
+                
+                if (error) throw error;
+                
+                showOtpPage(email);
+                showNotification('OTP Sent', 'Verification code sent to your email', 'success');
+                
+            } else {
+                // Staff member doesn't have an account - create one automatically via OTP
+                console.log('🆕 Staff member without account, creating automatically via OTP');
+                
+                const { data, error } = await supabase.auth.signInWithOtp({
+                    email: email,
+                    options: {
+                        data: {
+                            user_type: 'staff',
+                            is_staff: true,
+                            staff_name: staffBusinesses[0]?.staff_name || email.split('@')[0],
+                            staff_businesses: staffBusinesses.map(b => b.id)
+                        },
+                        shouldCreateUser: true
+                    }
+                });
+                
+                if (error) {
+                    console.error('❌ OTP send error:', error);
+                    throw error;
+                }
+                
+                showOtpPage(email);
+                showNotification(
+                    'Welcome Staff Member!', 
+                    'Verification code sent to your email. Your staff account will be created automatically.',
+                    'success'
+                );
+            }
+            
+        } catch (checkError) {
+            console.log('⚠️ Profile check failed, proceeding with OTP:', checkError);
+            
+            // If profile check fails, still try to send OTP
+            const { data, error } = await supabase.auth.signInWithOtp({
+                email: email,
+                options: {
+                    data: {
+                        user_type: 'staff',
+                        is_staff: true
+                    },
+                    shouldCreateUser: true
+                }
+            });
+            
+            if (error) throw error;
+            
+            showOtpPage(email);
+            showNotification('OTP Sent', 'Verification code sent to your email', 'success');
+        }
+        
+    } catch (error) {
+        console.error('❌ Direct staff login error:', error);
+        showNotification('Login Error', 'Failed to process staff login. Please try again.', 'error');
+    }
+}
+
 // After successful login, load user role
 async function loadUserRoleAfterLogin() {
     await loadCurrentUserRole();
@@ -548,19 +667,6 @@ async function handleOtpVerification(e) {
         
         if (error) {
             console.error('❌ OTP verification error:', error);
-            
-            // Check if this is a staff member without a user profile
-            if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
-                console.log('👥 Checking if staff member without profile...');
-                const staffBusinesses = await checkStaffMembership(currentEmail);
-                
-                if (staffBusinesses.length > 0) {
-                    console.log('✅ Staff member found, creating user profile...');
-                    await createStaffUserProfile(currentEmail, staffBusinesses);
-                    // Retry OTP verification after creating profile
-                    return await handleOtpVerification(e);
-                }
-            }
             throw error;
         }
         
@@ -569,41 +675,20 @@ async function handleOtpVerification(e) {
         currentUser = data.user;
         console.log('👤 User after OTP verification:', currentUser);
         
-        // Check if user is staff member in any business
+        // Set flag to prevent auth state change interference
+        isCompletingProfile = true;
+        
+        // Check if this user is a staff member
         const staffBusinesses = await checkStaffMembership(currentEmail);
         
-        if (isNewUser) {
-            // New user - check if they were added as staff
-            if (staffBusinesses.length > 0) {
-                // New staff member
-                console.log('👥 New staff member detected');
-                userBusinesses = staffBusinesses;
-                await setActiveBusiness(staffBusinesses[0].id);
-                await showDashboard();
-            } else {
-                // New regular user - show profile setup
-                console.log('🆕 New business owner, showing profile setup');
-                showProfilePage();
-            }
+        if (staffBusinesses.length > 0) {
+            // This is a staff member
+            console.log('👥 Staff member authenticated, setting up session...');
+            await handleStaffMemberPostLogin(staffBusinesses);
         } else {
-            // Existing user - check staff membership first
-            if (staffBusinesses.length > 0) {
-                console.log('✅ Existing staff member, loading dashboard');
-                userBusinesses = staffBusinesses;
-                await setActiveBusiness(staffBusinesses[0].id);
-                await showDashboard();
-            } else {
-                // Check if user owns any businesses
-                const userRoles = await loadUserRoles();
-                if (Object.keys(userRoles).length > 0) {
-                    console.log('✅ Existing user with businesses, loading dashboard');
-                    await showDashboard();
-                } else {
-                    // Existing user but no businesses - show create business
-                    console.log('📝 Existing user without businesses, showing create business');
-                    showCreateBusinessOnboarding();
-                }
-            }
+            // This is a regular user
+            console.log('👤 Regular user, checking profile completion...');
+            await checkUserBusinessesAndProfile();
         }
         
         showNotification('Success', 'Successfully authenticated!', 'success');
@@ -613,6 +698,122 @@ async function handleOtpVerification(e) {
         showNotification('Verification Failed', 'Invalid OTP code.', 'error');
     } finally {
         setLoadingState(otpText, otpLoading, otpSubmit, false);
+    }
+}
+
+async function handleStaffMemberPostLogin(staffBusinesses) {
+    try {
+        console.log('👥 Processing staff member post-login with session persistence...');
+        
+        // Ensure staff profile exists in profiles table
+        await ensureStaffProfileExists(staffBusinesses);
+        
+        // Set user businesses and active business
+        userBusinesses = staffBusinesses;
+        
+        // Set the first staff business as active
+        if (staffBusinesses.length > 0) {
+            await setActiveBusiness(staffBusinesses[0].id);
+        }
+        
+        // Mark as staff user and set role
+        currentUser.is_staff = true;
+        currentUser.user_type = 'staff';
+        
+        // 🔥 CRITICAL: Load user role immediately
+        await loadCurrentUserRole();
+        
+        // 🔥 CRITICAL: Save staff session data to localStorage
+        saveStaffSessionData(staffBusinesses);
+        
+        // Apply role-based access
+        applyRoleBasedAccess();
+        
+        // Show dashboard
+        await showDashboard();
+        
+        // Reset the completion flag
+        isCompletingProfile = false;
+        
+    } catch (error) {
+        console.error('❌ Staff post-login error:', error);
+        isCompletingProfile = false;
+        throw error;
+    }
+}
+
+// Save staff session data to localStorage for persistence
+function saveStaffSessionData(staffBusinesses) {
+    try {
+        console.log('💾 Saving staff session data...');
+        
+        const staffSession = {
+            user_id: currentUser.id,
+            email: currentUser.email,
+            business_id: currentBusiness?.id,
+            business_name: currentBusiness?.name,
+            role: currentUser.role,
+            is_staff: true,
+            user_type: 'staff',
+            staff_businesses: staffBusinesses,
+            login_time: new Date().toISOString()
+        };
+        
+        localStorage.setItem('staffSession', JSON.stringify(staffSession));
+        localStorage.setItem('profile_completed', 'true');
+        localStorage.setItem('user_has_businesses', 'true');
+        
+        console.log('✅ Staff session data saved:', staffSession);
+        
+    } catch (error) {
+        console.error('❌ Error saving staff session:', error);
+    }
+}
+
+// Ensure staff profile exists in profiles table
+async function ensureStaffProfileExists(staffBusinesses) {
+    try {
+        console.log('🔍 Ensuring staff profile exists...');
+        
+        const { data: existingProfile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+        
+        if (error || !existingProfile) {
+            console.log('📝 Creating staff profile...');
+            
+            // Get staff details from staff_roles
+            const staffDetails = staffBusinesses[0];
+            
+            const staffProfile = {
+                id: currentUser.id,
+                email: currentUser.email,
+                full_name: staffDetails?.staff_name || currentUser.email.split('@')[0],
+                role: staffDetails?.staff_role || 'staff',
+                is_staff: true,
+                user_type: 'staff',
+                business_name: staffDetails?.name || 'Staff Business'
+            };
+            
+            const { error: insertError } = await supabase
+                .from('profiles')
+                .insert([staffProfile]);
+            
+            if (insertError) {
+                console.warn('⚠️ Staff profile creation warning:', insertError);
+                // Don't throw error - we can continue without profile
+            } else {
+                console.log('✅ Staff profile created successfully');
+            }
+        } else {
+            console.log('✅ Staff profile already exists');
+        }
+        
+    } catch (error) {
+        console.error('❌ Staff profile check error:', error);
+        // Don't throw error - we can continue without profile
     }
 }
 
@@ -810,13 +1011,11 @@ async function checkStaffMembership(email) {
     try {
         console.log('🔍 Checking staff membership for:', email);
         
+        // Check staff_roles table for active staff memberships
         const { data: staffRoles, error } = await supabase
             .from('staff_roles')
-            .select(`
-                *,
-                businesses (*)
-            `)
-            .eq('email', email)
+            .select('id, business_id, role, staff_name, email, owner_id, is_active, status')
+            .eq('email', email.toLowerCase())
             .eq('is_active', true)
             .eq('status', 'active');
 
@@ -828,15 +1027,34 @@ async function checkStaffMembership(email) {
         console.log('📊 Staff roles found:', staffRoles);
 
         if (staffRoles && staffRoles.length > 0) {
-            // User is a staff member - return their businesses
-            const staffBusinesses = staffRoles.map(role => ({
-                ...role.businesses,
-                access_type: 'staff',
-                staff_role: role.role,
-                staff_role_id: role.id
-            }));
-            
-            console.log('✅ Staff businesses:', staffBusinesses);
+            // Get business details for each staff role
+            const businessIds = staffRoles.map(role => role.business_id);
+            const { data: businesses, error: businessError } = await supabase
+                .from('businesses')
+                .select('*')
+                .in('id', businessIds)
+                .eq('is_active', true);
+
+            if (businessError) {
+                console.error('❌ Error loading businesses for staff:', businessError);
+                return [];
+            }
+
+            // Combine staff roles with business data
+            const staffBusinesses = staffRoles.map(role => {
+                const business = businesses.find(b => b.id === role.business_id);
+                return business ? {
+                    ...business,
+                    access_type: 'staff',
+                    staff_role: role.role,
+                    staff_name: role.staff_name,
+                    staff_email: role.email,
+                    staff_role_id: role.id,
+                    added_by_owner_id: role.owner_id
+                } : null;
+            }).filter(business => business !== null);
+
+            console.log('✅ Staff businesses found:', staffBusinesses.length);
             return staffBusinesses;
         }
 
@@ -844,6 +1062,61 @@ async function checkStaffMembership(email) {
         
     } catch (error) {
         console.error('❌ Error in checkStaffMembership:', error);
+        return [];
+    }
+}
+
+// Alternative method for staff membership check
+async function checkStaffMembershipAlternative(email) {
+    try {
+        console.log('🔍 Using alternative staff membership check for:', email);
+        
+        // Simple query without complex joins
+        const { data: staffRoles, error } = await supabase
+            .from('staff_roles')
+            .select('*')
+            .eq('email', email)
+            .eq('is_active', true)
+            .eq('status', 'active');
+
+        if (error) {
+            console.error('❌ Alternative staff check failed:', error);
+            return [];
+        }
+
+        if (!staffRoles || staffRoles.length === 0) {
+            return [];
+        }
+
+        const staffBusinesses = [];
+        
+        // Get business details one by one (less efficient but more reliable)
+        for (const role of staffRoles) {
+            const { data: business, error: businessError } = await supabase
+                .from('businesses')
+                .select('*')
+                .eq('id', role.business_id)
+                .eq('is_active', true)
+                .single();
+
+            if (!businessError && business) {
+                staffBusinesses.push({
+                    ...business,
+                    access_type: 'staff',
+                    staff_role: role.role,
+                    staff_name: role.staff_name,
+                    staff_email: role.email,
+                    staff_role_id: role.id,
+                    added_by_owner_id: role.owner_id
+                });
+            }
+        }
+
+        console.log('✅ Alternative staff businesses found:', staffBusinesses.length);
+        return staffBusinesses;
+        
+    } catch (error) {
+        console.error('❌ Error in alternative staff check:', error);
         return [];
     }
 }
@@ -1000,52 +1273,103 @@ async function handleResendOtp(e) {
 
 async function handleProfileCompletion(e) {
     e.preventDefault();
-    console.log('💾 Completing profile...');
+    console.log('💾 Completing profile and creating business...');
     
     const fullName = document.getElementById('full-name').value;
     const phone = document.getElementById('phone').value;
+    const businessName = document.getElementById('profile-business-name').value;
     const businessType = document.getElementById('business-type').value;
+    
+    if (!businessName.trim()) {
+        showNotification('Business Name Required', 'Please enter your business name to continue.', 'error');
+        document.getElementById('profile-business-name').focus();
+        return;
+    }
     
     const profileSubmit = document.getElementById('profile-submit');
     const profileText = document.getElementById('profile-text');
     const profileLoading = document.getElementById('profile-loading');
     
     setLoadingState(profileText, profileLoading, profileSubmit, true);
+    isCompletingProfile = true;
     
     try {
-        console.log('👤 Creating profile for user:', currentUser.id);
+        console.log('👤 Creating profile and business for user:', currentUser.id);
         
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .insert([
-                    {
-                        id: currentUser.id,
-                        email: currentUser.email,
-                        full_name: fullName,
-                        phone: phone,
-                        business_name: currentUser.businessName,
-                        business_type: businessType,
-                        role: 'owner'
-                    }
-                ]);
-            
-            if (error) {
-                console.warn('⚠️ Profile creation warning:', error.message);
-            } else {
-                console.log('✅ Profile created successfully');
-            }
-        } catch (dbError) {
-            console.warn('⚠️ Database error:', dbError.message);
+        // Create profile first
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([
+                {
+                    id: currentUser.id,
+                    email: currentUser.email,
+                    full_name: fullName,
+                    phone: phone,
+                    business_name: businessName,
+                    business_type: businessType,
+                    role: 'owner'
+                }
+            ]);
+        
+        if (profileError) {
+            console.warn('⚠️ Profile creation warning:', profileError.message);
+        } else {
+            console.log('✅ Profile created successfully');
         }
         
-        console.log('🎉 Profile completion successful, showing dashboard');
-        await showDashboard();
-        showNotification('Profile Completed!', 'Your account has been set up successfully.', 'success');
+        // Create the actual business
+        console.log('🏢 Creating business:', businessName);
+        const { data: businessData, error: businessError } = await supabase
+            .from('businesses')
+            .insert([
+                {
+                    name: businessName,
+                    business_type: businessType,
+                    owner_id: currentUser.id,
+                    currency: 'USD', // default currency
+                    is_active: true
+                }
+            ])
+            .select()
+            .single();
+        
+        if (businessError) {
+            console.error('❌ Business creation error:', businessError);
+            throw new Error('Failed to create business: ' + businessError.message);
+        }
+        
+        console.log('✅ Business created successfully:', businessData);
+        
+        // Set as active business
+        currentBusiness = businessData;
+        userBusinesses = [businessData];
+        
+        // Mark profile as completed in localStorage
+        localStorage.setItem('profile_completed', 'true');
+        localStorage.setItem('user_has_businesses', 'true');
+        
+        // Reset the flag
+        isCompletingProfile = false;
+        
+        console.log('🎉 Profile and business setup successful, showing dashboard');
+        
+        // 🔥 CRITICAL: Show success message and redirect
+        showNotification('Setup Complete!', 'Your business has been created successfully.', 'success');
+        
+        // Wait for notification to show, then redirect
+        setTimeout(async () => {
+            await showDashboard();
+            
+            // Force load dashboard data
+            if (window.loadDashboardData) {
+                await loadDashboardData();
+            }
+        }, 1500);
         
     } catch (error) {
         console.error('❌ Profile completion error:', error);
-        showNotification('Setup Error', 'Error completing profile: ' + error.message, 'error');
+        isCompletingProfile = false;
+        showNotification('Setup Error', error.message, 'error');
     } finally {
         setLoadingState(profileText, profileLoading, profileSubmit, false);
     }
@@ -1079,28 +1403,190 @@ function handleCancel(e) {
 
 // Add this to your handleLogout function in auth.js
 function handleLogout() {
-    console.log('🚪 Logging out...');
+    console.log('🚪 Performing comprehensive logout with data cleanup...');
     
-    // Clear all user-specific data
-    clearAllUserData();
-    
-    // Clear global variables
-    currentUser = null;
-    currentBusiness = null;
-    userBusinesses = [];
-    userRoles = {};
-    currentEmail = '';
-    isNewUser = false;
-    
-    supabase.auth.signOut();
-    showLandingPage();
-    
-    showNotification('Logged Out', 'You have been successfully logged out.', 'info');
+    try {
+        // 1. Clear all Supabase sessions first
+        supabase.auth.signOut().then(() => {
+            console.log('✅ Supabase auth session cleared');
+        });
+        
+        // 2. Clear ALL global variables
+        currentUser = null;
+        currentBusiness = null;
+        currentEmail = '';
+        userBusinesses = [];
+        userRoles = {};
+        isNewUser = false;
+        isCompletingProfile = false;
+        isCreatingBusiness = false;
+        authStateChangeHandled = false;
+        
+        // 3. Clear ALL localStorage data
+        localStorage.clear();
+        
+        // 4. Clear ALL sessionStorage data  
+        sessionStorage.clear();
+        
+        // 5. Clear specific business-related data
+        clearAllBusinessData();
+        
+        // 6. Clear any remaining cached data
+        clearAllCachedData();
+        
+        // 7. Reset UI state
+        resetUIState();
+        
+        // 8. Clear any intervals or timeouts
+        clearAllIntervals();
+        
+        console.log('✅ Comprehensive logout completed');
+        
+        // 9. Show landing page
+        showLandingPage();
+        
+        // 10. Show logout confirmation
+        showNotification('Logged Out', 'You have been successfully logged out. All data has been cleared.', 'info', 3000);
+        
+    } catch (error) {
+        console.error('❌ Logout error:', error);
+        // Force cleanup even if there's an error
+        forceCleanup();
+        showLandingPage();
+    }
 }
 
-// Auth state change listener
+// Enhanced cleanup functions
+function clearAllBusinessData() {
+    console.log('🧹 Clearing all business data...');
+    
+    // Clear all business-specific localStorage keys
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+            key.includes('business') || 
+            key.includes('inventory') ||
+            key.includes('sales') ||
+            key.includes('products') ||
+            key.includes('customers') ||
+            key.includes('staff') ||
+            key.includes('financial') ||
+            key.includes('analytics') ||
+            key.includes('dashboard')
+        )) {
+            keysToRemove.push(key);
+        }
+    }
+    
+    keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        console.log('🗑️ Removed:', key);
+    });
+}
+
+function clearAllCachedData() {
+    console.log('🧹 Clearing all cached data...');
+    
+    // Clear any module-level caches
+    if (window.clearBusinessData) {
+        clearBusinessData('all');
+    }
+    
+    // Clear any chart instances
+    if (window.salesChart) {
+        window.salesChart.destroy();
+        window.salesChart = null;
+    }
+    if (window.revenueChart) {
+        window.revenueChart.destroy();
+        window.revenueChart = null;
+    }
+    
+    // Clear any data arrays
+    if (window.businessData) {
+        window.businessData = {
+            products: [],
+            customers: [],
+            suppliers: [],
+            sales: [],
+            purchases: [],
+            expenses: []
+        };
+    }
+}
+
+function resetUIState() {
+    console.log('🔄 Resetting UI state...');
+    
+    // Reset all forms
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => form.reset());
+    
+    // Clear all table data
+    const tables = document.querySelectorAll('table');
+    tables.forEach(table => {
+        const tbody = table.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '';
+    });
+    
+    // Reset dashboard metrics
+    const metricElements = document.querySelectorAll('[data-metric]');
+    metricElements.forEach(element => {
+        element.textContent = '0';
+    });
+    
+    // Hide modals
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.classList.add('d-none');
+    });
+}
+
+function clearAllIntervals() {
+    console.log('⏰ Clearing all intervals...');
+    
+    // Get the highest interval ID
+    let highestIntervalId = setInterval(() => {}, 0);
+    for (let i = 0; i < highestIntervalId; i++) {
+        clearInterval(i);
+    }
+    
+    // Clear any specific intervals
+    if (window.countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+}
+
+function forceCleanup() {
+    console.log('⚠️ Performing forced cleanup...');
+    
+    // Nuclear option - clear everything
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear all global variables
+    const globals = ['currentUser', 'currentBusiness', 'userBusinesses', 'userRoles', 'currentEmail'];
+    globals.forEach(global => {
+        window[global] = null;
+    });
+    
+    // Reload the page as last resort
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+// Enhanced auth state change listener with staff session support
 supabase.auth.onAuthStateChange((event, session) => {
     console.log('🔄 Auth state changed:', event, session);
+    
+    // Don't interfere if user is completing profile or creating business
+    if (isCompletingProfile || isCreatingBusiness) {
+        console.log('🔄 Skipping auth state change - profile/business creation in progress');
+        return;
+    }
     
     if (event === 'SIGNED_IN' && session) {
         if (authStateChangeHandled && currentUser?.id === session.user.id) {
@@ -1112,19 +1598,165 @@ supabase.auth.onAuthStateChange((event, session) => {
         authStateChangeHandled = true;
         console.log('✅ User signed in via auth state change');
         
-        setTimeout(() => {
-            showDashboard();
-        }, 100);
+        // Check if this is a returning staff member with saved session
+        const staffSession = loadStaffSession();
+        if (staffSession && staffSession.user_id === currentUser.id) {
+            console.log('🔍 Returning staff member detected, restoring session...');
+            setTimeout(async () => {
+                await restoreStaffSession(staffSession);
+            }, 100);
+        } else {
+            // Check if user has completed profile and has businesses
+            setTimeout(async () => {
+                await checkUserBusinessesAndProfile();
+            }, 100);
+        }
         
     } else if (event === 'SIGNED_OUT') {
         currentUser = null;
         authStateChangeHandled = false;
+        // Clear all session data on logout
+        clearAllSessionData();
         console.log('✅ User signed out');
         showLandingPage();
     } else if (event === 'INITIAL_SESSION') {
         if (!currentUser && session?.user) {
             currentUser = session.user;
             console.log('🔐 Initial session found');
+            
+            // Check for existing staff session on initial load
+            const staffSession = loadStaffSession();
+            if (staffSession && staffSession.user_id === currentUser.id) {
+                console.log('🔍 Restoring staff session on initial load...');
+                setTimeout(async () => {
+                    await restoreStaffSession(staffSession);
+                }, 100);
+            }
         }
     }
 });
+
+// Load staff session from localStorage
+function loadStaffSession() {
+    try {
+        const staffSession = JSON.parse(localStorage.getItem('staffSession') || '{}');
+        if (staffSession.user_id && staffSession.is_staff) {
+            console.log('🔍 Loaded staff session:', staffSession);
+            return staffSession;
+        }
+        return null;
+    } catch (error) {
+        console.error('❌ Error loading staff session:', error);
+        return null;
+    }
+}
+
+// Restore staff session from saved data
+async function restoreStaffSession(staffSession) {
+    try {
+        console.log('🔄 Restoring staff session...');
+        
+        // Set current user properties
+        currentUser.is_staff = true;
+        currentUser.user_type = 'staff';
+        currentUser.role = staffSession.role;
+        
+        // Load staff businesses
+        if (staffSession.staff_businesses) {
+            userBusinesses = staffSession.staff_businesses;
+        } else {
+            // Fallback: reload staff businesses from database
+            userBusinesses = await checkStaffMembership(currentUser.email);
+        }
+        
+        // Set active business
+        if (staffSession.business_id && userBusinesses.length > 0) {
+            const business = userBusinesses.find(b => b.id === staffSession.business_id);
+            if (business) {
+                currentBusiness = business;
+            } else {
+                await setActiveBusiness(userBusinesses[0].id);
+            }
+        } else if (userBusinesses.length > 0) {
+            await setActiveBusiness(userBusinesses[0].id);
+        }
+        
+        // Apply role-based access
+        applyRoleBasedAccess();
+        
+        // Show dashboard
+        await showDashboard();
+        
+        console.log('✅ Staff session restored successfully');
+        
+    } catch (error) {
+        console.error('❌ Error restoring staff session:', error);
+        // Fallback to regular check
+        await checkUserBusinessesAndProfile();
+    }
+}
+
+// Clear all session data
+function clearAllSessionData() {
+    localStorage.removeItem('staffSession');
+    localStorage.removeItem('profile_completed');
+    localStorage.removeItem('user_has_businesses');
+    localStorage.removeItem(STATE_KEYS.LAST_VISIBLE_SECTION);
+    localStorage.removeItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE);
+}
+
+// Add this function to check user profile and businesses
+async function checkUserBusinessesAndProfile() {
+    try {
+        console.log('🔍 Checking user profile and businesses with staff support...');
+        
+        // First check if user is a staff member
+        const staffBusinesses = await checkStaffMembership(currentUser.email);
+        if (staffBusinesses.length > 0) {
+            console.log('👥 Staff member detected in check');
+            await handleStaffMemberPostLogin(staffBusinesses);
+            return;
+        }
+        
+        // Regular user flow
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+        
+        const { data: businesses, error: businessesError } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('owner_id', currentUser.id)
+            .eq('is_active', true);
+        
+        const hasProfile = !profileError && profile;
+        const hasBusinesses = !businessesError && businesses && businesses.length > 0;
+        
+        console.log('📊 User status - Profile:', hasProfile, 'Businesses:', hasBusinesses);
+        
+        if (hasProfile && hasBusinesses) {
+            // User is fully set up
+            localStorage.setItem('profile_completed', 'true');
+            localStorage.setItem('user_has_businesses', 'true');
+            userBusinesses = businesses;
+            currentBusiness = businesses[0];
+            await showDashboard();
+        } else if (!hasProfile) {
+            // User needs to complete profile
+            isCompletingProfile = true;
+            showProfilePage();
+        } else if (!hasBusinesses) {
+            // User has profile but no businesses - show create business
+            isCompletingProfile = true;
+            showCreateBusinessOnboarding();
+        }
+        
+    } catch (error) {
+        console.error('❌ Error checking user status:', error);
+        // Default to profile setup if there's any error
+        isCompletingProfile = true;
+        showProfilePage();
+    }
+}

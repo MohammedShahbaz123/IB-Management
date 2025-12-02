@@ -194,6 +194,11 @@ header {
     border: 2px solid var(--primary);
     color: var(--primary);
 }
+.btn-danger{
+    background: transparent;
+    border: 2px solid var(--danger);
+    color: var(--danger);
+}
 
 .btn-primary {
     background: var(--primary);
@@ -208,6 +213,10 @@ header {
 
 .btn-outline:hover {
     background: var(--primary);
+    color: var(--white);
+}
+.btn-danger:hover {
+    background: var(--danger);
     color: var(--white);
 }
 
@@ -250,6 +259,13 @@ header {
 }
 
 .hero .btn-outline:hover {
+    background: var(--white);
+    color: var(--primary);
+}
+#hero-signup{
+    border: 2px solid var(--white);
+}
+#hero-signup:hover{
     background: var(--white);
     color: var(--primary);
 }
