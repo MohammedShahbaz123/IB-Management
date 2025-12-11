@@ -1821,21 +1821,6 @@ function hideSalesElementsInOverview() {
         console.log('🚫 Hiding Quick Sale button');
     });
     
-    // Hide Export buttons
-    const exportButtons = document.querySelectorAll(`
-        #export-btn,
-        .export-btn,
-        [data-action="export"],
-        .btn[onclick*="export"],
-        .btn-download
-    `);
-    
-    exportButtons.forEach(button => {
-        button.style.display = 'none';
-        button.classList.add('d-none');
-        console.log('🚫 Hiding Export button');
-    });
-    
     // Hide Financial Summary sections
     const financialSections = document.querySelectorAll(`
         #financial-summary,

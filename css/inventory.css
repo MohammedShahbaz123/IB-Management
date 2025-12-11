@@ -272,7 +272,6 @@
     flex: 1;
     font-size: 0.95rem;
     line-height: 1.4;
-    word-break: break-word;
 }
 
 .detail-value.font-weight-bold {

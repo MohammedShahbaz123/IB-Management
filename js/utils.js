@@ -477,6 +477,21 @@ function canAccessPage(page) {
     return hasPermission(page, requiredPermission[0]);
 }
 
+// Utility function for formatting dates
+function formatDate(dateString) {
+    if (!dateString) return 'Never';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    } catch (error) {
+        return 'Invalid Date';
+    }
+}
+
 // Add these to your utils.js if they don't exist
 function escapeHtml(unsafe) {
     if (!unsafe) return '';
@@ -529,3 +544,30 @@ async function loadBusinessIntelligence() {
         console.error('❌ Business intelligence load failed:', error);
     }
 }
+
+// Make functions globally available
+window.initializePartiesSystem = initializePartiesSystem;
+window.showAddPartyModal = showAddPartyModal;
+window.hideAddPartyModal = hideAddPartyModal;
+window.showEditPartyModal = showEditPartyModal;
+window.hideEditPartyModal = hideEditPartyModal;
+window.showPartyDetailsModal = showPartyDetailsModal;
+window.hidePartyDetailsModal = hidePartyDetailsModal;
+window.editPartyFromDetails = editPartyFromDetails;
+window.clearPartyFilters = clearPartyFilters;
+window.togglePartyView = togglePartyView;
+window.toggleSelectAllParties = toggleSelectAllParties;
+window.togglePartySelection = togglePartySelection;
+window.clearPartySelection = clearPartySelection;
+window.changePartyPage = changePartyPage;
+window.showPartyGroup = showPartyGroup;
+window.deleteSelectedParties = deleteSelectedParties;
+window.sendBulkEmail = sendBulkEmail;
+window.exportSelectedParties = exportSelectedParties;
+window.exportParties = exportParties;
+window.quickTransaction = quickTransaction;
+window.editParty = editParty;
+window.showPartyDetails = showPartyDetails;
+window.showContactAdmin = showContactAdmin;
+
+console.log('✅ Parties management system loaded successfully');

@@ -4,6 +4,7 @@ let currentPartyPage = 1;
 const partiesPageSize = 20;
 let selectedParties = new Set();
 let currentPartyView = 'grid';
+let isAddingParty = false;
 
 // Initialize parties system
 function initializePartiesSystem() {
@@ -11,6 +12,7 @@ function initializePartiesSystem() {
     
     if (document.getElementById('parties-page')) {
         setupPartiesEventListeners();
+        setupPartiesShortcuts();
         loadPartiesStats();
         loadParties();
         loadRecentPartyTransactions();
@@ -19,35 +21,52 @@ function initializePartiesSystem() {
 
 // Setup event listeners
 function setupPartiesEventListeners() {
-    // Search functionality
+    // Remove existing listeners first to prevent duplicates
     const searchInput = document.getElementById('party-search');
+    const addPartyForm = document.getElementById('add-party-form');
+    const editPartyForm = document.getElementById('edit-party-form');
+    
+    // Clone and replace elements to remove all event listeners
     if (searchInput) {
-        searchInput.addEventListener('input', debounce(() => {
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        
+        // Add fresh listener
+        newSearchInput.addEventListener('input', debounce(() => {
             console.log('🔍 Searching parties...');
             currentPartyPage = 1;
             loadParties();
         }, 300));
     }
     
-    // Add party form
-    const addPartyForm = document.getElementById('add-party-form');
+    // For forms, remove all listeners and add fresh ones
     if (addPartyForm) {
-        addPartyForm.addEventListener('submit', async function(e) {
+        // Remove all existing listeners by replacing the form
+        const newAddForm = addPartyForm.cloneNode(true);
+        addPartyForm.parentNode.replaceChild(newAddForm, addPartyForm);
+        
+        // Add fresh listener
+        newAddForm.addEventListener('submit', async function(e) {
             e.preventDefault();
+            e.stopImmediatePropagation(); // Prevent other listeners
+            console.log('📝 Add party form submitted (single time)');
             await addParty();
         });
     }
     
-    // Edit party form
-    const editPartyForm = document.getElementById('edit-party-form');
     if (editPartyForm) {
-        editPartyForm.addEventListener('submit', async function(e) {
+        const newEditForm = editPartyForm.cloneNode(true);
+        editPartyForm.parentNode.replaceChild(newEditForm, editPartyForm);
+        
+        newEditForm.addEventListener('submit', async function(e) {
             e.preventDefault();
+            e.stopImmediatePropagation();
+            console.log('📝 Edit party form submitted (single time)');
             await updateParty();
         });
     }
     
-    console.log('✅ Parties event listeners setup complete');
+    console.log('✅ Parties event listeners setup complete (fresh)');
 }
 
 // Load parties statistics
@@ -393,6 +412,7 @@ function changePartyPage(page) {
 }
 
 // Show party groups
+// Show party groups
 function showPartyGroup(group) {
     // Update active tab
     document.querySelectorAll('.group-tab').forEach(tab => {
@@ -400,9 +420,32 @@ function showPartyGroup(group) {
     });
     event.target.classList.add('active');
     
-    // Implement group filtering logic here
+    // Store current filter
+    localStorage.setItem('partyActiveGroup', group);
+    
+    // Apply group filtering
+    switch(group) {
+        case 'all':
+            // Reset filters
+            document.getElementById('party-type-filter').value = '';
+            document.getElementById('party-status-filter').value = '';
+            document.getElementById('party-balance-filter').value = '';
+            break;
+            
+        case 'favorites':
+            // You might need a "is_favorite" field in your parties table
+            // For now, just filter by type
+            document.getElementById('party-type-filter').value = 'customer';
+            break;
+            
+        case 'recent':
+            // Filter parties created in last 7 days
+            // This would require date filtering in loadParties()
+            break;
+    }
+    
     console.log(`Showing party group: ${group}`);
-    // You would implement filtering logic based on the group
+    loadParties();
 }
 
 // Toggle party view
@@ -481,6 +524,14 @@ function clearPartySelection() {
 
 // Add party
 async function addParty() {
+    // 🔥 PREVENT MULTIPLE SUBMISSIONS
+    if (isAddingParty) {
+        console.log('⚠️ Party submission already in progress, skipping...');
+        return;
+    }
+    
+    isAddingParty = true;
+    
     try {
         if (!currentBusiness?.id) {
             throw new Error('No business selected');
@@ -516,6 +567,8 @@ async function addParty() {
             throw new Error('Phone number is required');
         }
         
+        console.log('📝 Creating party:', partyData);
+        
         const { data: party, error } = await supabase
             .from('parties')
             .insert([partyData])
@@ -523,6 +576,8 @@ async function addParty() {
             .single();
         
         if (error) throw error;
+        
+        console.log('✅ Party created successfully:', party);
         
         showNotification('Success', 'Party added successfully', 'success');
         hideAddPartyModal();
@@ -532,6 +587,8 @@ async function addParty() {
     } catch (error) {
         console.error('❌ Error adding party:', error);
         showNotification('Error', error.message || 'Failed to add party', 'error');
+    } finally {
+        isAddingParty = false; // 🔥 RELEASE LOCK
     }
 }
 
@@ -860,3 +917,226 @@ document.addEventListener('DOMContentLoaded', function() {
         initializePartiesSystem();
     }
 });
+
+// Delete selected parties
+async function deleteSelectedParties() {
+    if (selectedParties.size === 0) {
+        showNotification('Info', 'No parties selected for deletion', 'info');
+        return;
+    }
+    
+    const confirmed = confirm(`Are you sure you want to delete ${selectedParties.size} parties? This action cannot be undone.`);
+    
+    if (!confirmed) return;
+    
+    try {
+        console.log(`🗑️ Deleting ${selectedParties.size} parties...`);
+        
+        const partyIds = Array.from(selectedParties);
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Delete parties one by one (or use bulk delete if supported)
+        for (const partyId of partyIds) {
+            try {
+                // Soft delete - set is_active to false
+                const { error } = await supabase
+                    .from('parties')
+                    .update({ 
+                        is_active: false,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', partyId)
+                    .eq('business_id', currentBusiness.id);
+                
+                if (error) throw error;
+                successCount++;
+                
+            } catch (error) {
+                console.error(`❌ Error deleting party ${partyId}:`, error);
+                errorCount++;
+            }
+        }
+        
+        // Clear selection
+        selectedParties.clear();
+        clearPartySelection();
+        
+        // Show results
+        if (successCount > 0) {
+            showNotification('Success', `Successfully deleted ${successCount} parties`, 'success');
+            loadParties();
+            loadPartiesStats();
+        }
+        
+        if (errorCount > 0) {
+            showNotification('Warning', `${successCount} deleted, ${errorCount} failed`, 'warning');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in bulk delete:', error);
+        showNotification('Error', 'Failed to delete parties', 'error');
+    }
+}
+
+// Also add the other missing bulk action functions:
+
+// Send bulk email to selected parties
+async function sendBulkEmail() {
+    if (selectedParties.size === 0) {
+        showNotification('Info', 'No parties selected for email', 'info');
+        return;
+    }
+    
+    // Get parties with email addresses
+    const partiesWithEmails = currentParties.filter(party => 
+        selectedParties.has(party.id) && party.email
+    );
+    
+    if (partiesWithEmails.length === 0) {
+        showNotification('Info', 'No selected parties have email addresses', 'info');
+        return;
+    }
+    
+    console.log(`📧 Sending email to ${partiesWithEmails.length} parties...`);
+    
+    // You can implement email sending logic here
+    // For now, just show a notification
+    showNotification(
+        'Email Ready', 
+        `Ready to send email to ${partiesWithEmails.length} parties. Email addresses: ${partiesWithEmails.map(p => p.email).join(', ')}`,
+        'info'
+    );
+}
+
+// Export selected parties
+function exportSelectedParties() {
+    if (selectedParties.size === 0) {
+        showNotification('Info', 'No parties selected for export', 'info');
+        return;
+    }
+    
+    const selectedPartiesData = currentParties.filter(party => 
+        selectedParties.has(party.id)
+    );
+    
+    console.log(`📤 Exporting ${selectedPartiesData.length} parties...`);
+    
+    // Create CSV content
+    const headers = ['Name', 'Type', 'Email', 'Phone', 'Company', 'Balance', 'Status'];
+    const rows = selectedPartiesData.map(party => [
+        party.name,
+        party.type,
+        party.email || '',
+        party.phone || '',
+        party.company || '',
+        party.balance || 0,
+        party.status || 'active'
+    ]);
+    
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `selected_parties_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showNotification('Success', `Exported ${selectedPartiesData.length} parties to CSV`, 'success');
+}
+
+// Also add this function to handle bulk operations
+function showContactAdmin() {
+    showNotification('Contact Admin', 'Please contact your business administrator for assistance.', 'info');
+}
+
+// Add function to get role badge class
+function getRoleBadgeClass(role) {
+    switch(role) {
+        case 'owner': return 'badge-primary';
+        case 'admin': return 'badge-warning';
+        case 'manager': return 'badge-info';
+        case 'staff': return 'badge-secondary';
+        default: return 'badge-light';
+    }
+}
+
+// Parties-specific keyboard shortcuts
+function setupPartiesShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        // Only trigger if we're on parties page and not in an input
+        const onPartiesPage = document.getElementById('parties-page') && 
+                             !document.getElementById('parties-page').classList.contains('d-none');
+        
+        if (!onPartiesPage || 
+            e.target.tagName === 'INPUT' || 
+            e.target.tagName === 'TEXTAREA' ||
+            e.target.tagName === 'SELECT') {
+            return;
+        }
+        
+        // Ctrl/Cmd + N - Add new party
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+            e.preventDefault();
+            showAddPartyModal();
+            showNotification('Info', 'Opening new party form...', 'info', 1500);
+        }
+        
+        // Ctrl/Cmd + E - Edit selected party
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+            e.preventDefault();
+            const selectedParty = document.querySelector('.party-card:hover, .party-select-checkbox:checked');
+            if (selectedParty) {
+                const partyCard = selectedParty.closest('.party-card, tr[data-party-id]');
+                if (partyCard) {
+                    const partyId = partyCard.dataset.partyId;
+                    if (partyId) {
+                        editParty(partyId);
+                    }
+                }
+            }
+        }
+        
+        // Ctrl/Cmd + V - View party details
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+            e.preventDefault();
+            const hoveredParty = document.querySelector('.party-card:hover');
+            if (hoveredParty) {
+                const partyId = hoveredParty.dataset.partyId;
+                if (partyId) {
+                    showPartyDetails(partyId);
+                }
+            }
+        }
+        
+        // Ctrl/Cmd + F - Focus search
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('party-search');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+                showNotification('Info', 'Search focused. Type to filter parties.', 'info', 1500);
+            }
+        }
+        
+        // Space - Toggle selection
+        if (e.key === ' ') {
+            e.preventDefault();
+            const hoveredRow = e.target.closest('tr[data-party-id]');
+            if (hoveredRow) {
+                const checkbox = hoveredRow.querySelector('.party-select-checkbox');
+                if (checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+    });
+}

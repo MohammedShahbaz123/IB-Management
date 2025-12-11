@@ -30,6 +30,9 @@
     </script>
 </head> 
 <body>
+    <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+    <i class="fas fa-keyboard"></i>
+</button>
 
     <!-- Initial Loading Screen -->
     <div id="app-loading">
@@ -591,90 +594,309 @@
                 </div>
             </div>
 
-            <!-- Enhanced Sales Management -->
-            <div id="sales-page" class="page-content d-none">
-                <div class="dashboard-header">
-                    <div class="dashboard-title">
+<!-- Sales Management Page -->
+<div id="sales-page" class="page-content d-none">
+
+    <div class="dashboard-header">
+        <div class="dashboard-title">
                         <h1>Sales Management</h1>
-                        <p>Manage sales, invoices, and customer orders</p>
-                    </div>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="createNewSale()"><i class="fas fa-plus"></i> New Sale</button>
-                        <button class="btn btn-outline" onclick="exportData('sales')"><i class="fas fa-download"></i> Export</button>
-                        <button class="btn btn-outline" onclick="showSalesReport()"><i class="fas fa-chart-bar"></i> Reports</button>
-                    </div>
-                </div>
+                        <p>Manage, and create sale invoices</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="create-sale-btn">
+                <i class="fas fa-plus"></i> New Sale
+            </button>
+            <button class="btn btn-outline" id="sales-reports-btn">
+                <i class="fas fa-chart-bar"></i> Reports
+            </button>
+            <button class="btn btn-outline" id="export-sales-btn">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
 
-                <!-- Sales Summary -->
-                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h4 id="total-sales-count">0</h4>
-                            <p>Total Sales</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h4 id="total-sales-amount">$0</h4>
-                            <p>Sales Amount</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h4 id="pending-invoices">0</h4>
-                            <p>Pending Invoices</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h4 id="avg-sale-value">$0</h4>
-                            <p>Avg Sale Value</p>
-                        </div>
-                    </div>
+    <!-- Sales Dashboard Content -->
+    <div id="sales-dashboard-content">
+        <div class="stats-grid">
+            <div class="stat-card" data-filter="all">
+                <div class="stat-icon" style="background: #4a6baf;">
+                    <i class="fas fa-shopping-cart"></i>
                 </div>
-
-                <!-- Sales List -->
-                <div class="content-card">
-                    <div class="card-header">
-                        <h2>Recent Sales</h2>
-                        <div class="header-actions">
-                            <input type="text" id="sales-search" class="form-control" placeholder="Search sales..." style="width: 200px;">
-                            <select id="sales-status-filter" class="form-control" style="width: 150px;">
-                                <option value="">All Status</option>
-                                <option value="pending">Pending</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="data-grid">
-                            <thead>
-                                <tr>
-                                    <th>Invoice No</th>
-                                    <th>Date</th>
-                                    <th>Customer</th>
-                                    <th>Items</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sales-table-body">
-                                <!-- Dynamic content -->
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="stat-info">
+                    <h3 id="total-sales-count">0</h3>
+                    <p>Total Sales</p>
                 </div>
             </div>
+            <div class="stat-card" data-filter="completed">
+                <div class="stat-icon" style="background: #2ecc71;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-sales-amount">$0</h3>
+                    <p>Sales Amount</p>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="pending">
+                <div class="stat-icon" style="background: #f39c12;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="pending-invoices">0</h3>
+                    <p>Pending Invoices</p>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="today">
+                <div class="stat-icon" style="background: #3498db;">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="avg-sale-value">$0</h3>
+                    <p>Avg Sale Value</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sales list table -->
+        <div class="content-card">
+            <div class="card-header">
+                <h2>Sales Records</h2>
+                <div class="header-actions">
+                    <button class="btn btn-outline btn-sm" id="refresh-sales-btn">
+                        <i class="fas fa-refresh"></i> Refresh
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="bulk-print-btn">
+                        <i class="fas fa-print"></i> Bulk Print
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="bulk-email-btn">
+                        <i class="fas fa-envelope"></i> Email Selected
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-sales">
+                            </th>
+                            <th>Invoice No</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="table-footer">
+                <div class="text-muted" id="sales-count-info">
+                    Showing 0 sales
+                </div>
+                <div id="sales-pagination"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-            <!-- Business Management Page -->
-            <div id="businesses-page" class="page-content d-none">
-                <div class="dashboard-header">
-                    <div class="dashboard-title">
-                        <h1>Business Management</h1>
-                        <p>Manage your businesses and switch between them</p>
+<!-- Sales Invoice Page -->
+<div id="sales-invoice-page" class="page-content d-none">
+    <div class="sale-invoice-header">
+        <div class="header-left">
+            <button class="btn btn-outline btn-sm back-to-sales-btn">
+                <i class="fas fa-arrow-left"></i> Back to Sales
+            </button>
+            <h1>Create Sale Invoice</h1>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-outline" id="clear-invoice-btn">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+            <button class="btn btn-primary" id="save-invoice-btn">
+                <i class="fas fa-save"></i> Save Invoice
+            </button>
+        </div>
+    </div>
+    
+    <div class="Sale-invoice-container">
+        <div class="invoice-meta-section">
+            <div class="meta-row">
+                <div class="meta-group">
+                    <label for="invoice-date">Invoice Date *</label>
+                    <input type="date" id="invoice-date" required>
+                </div>
+                <div class="meta-group">
+                    <label for="customer-select">Customer *</label>
+                    <div class="customer-select-wrapper">
+                        <select id="customer-select" required>
+                            <option value="">Select Customer</option>
+                        </select>
+                        <button type="button" class="quick-add-btn" id="add-customer-btn">
+                            <i class="fas fa-plus"></i> Add New
+                        </button>
                     </div>
+                </div>
+                <div class="meta-group">
+                    <label for="invoice-number">Invoice Number</label>
+                    <input type="text" id="invoice-number" readonly value="INV-001">
+                </div>
+            </div>
+        </div>
+        
+        <div class="add-items-section">
+            <h3><i class="fas fa-plus-circle"></i> Add Items</h3>
+            <div class="item-form-grid">
+                <div class="form-group">
+                    <label for="item-select">Item *</label>
+                    <input type="text" id="item-select" list="item-list" 
+                           placeholder="Search or select item">
+                    <datalist id="item-list"></datalist>
+                    <div id="stock-info" class="stock-info"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="item-quantity">Quantity *</label>
+                    <input type="number" id="item-quantity" min="1" step="1" 
+                           placeholder="0" value="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="item-price">Price ($) *</label>
+                    <input type="number" id="item-price" min="0.01" step="0.01" 
+                           placeholder="0.00" value="0.00">
+                </div>
+                
+                <div class="form-group">
+                    <label for="item-subtotal">Subtotal</label>
+                    <input type="text" id="item-subtotal" readonly 
+                           placeholder="0.00" class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary" id="add-item-btn">
+                        <i class="fas fa-plus"></i> Add to Invoice
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="items-table-section">
+            <h3><i class="fas fa-list"></i> Invoice Items</h3>
+            <div class="table-container">
+                <table class="invoice-items-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Subtotal</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-items-body">
+                        <!-- Items will be added here -->
+                    </tbody>
+                    <tfoot>
+                        <tr class="grand-total-row">
+                            <td colspan="3">Grand Total</td>
+                            <td id="grand-total-amount">$0.00</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        
+        <div class="notes-section">
+            <label for="invoice-notes">Additional Notes (Optional)</label>
+            <textarea id="invoice-notes" rows="2" 
+                      placeholder="Any additional notes for this invoice..."></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- Invoice Preview Container (Full Page) -->
+<div id="invoice-preview-page" class="page-content d-none">
+    <div class="container-fluid">
+        <!-- Preview Header - Single Row -->
+        <div class="preview-header bg-white border-bottom sticky-top" style="z-index: 1000;">
+            <div class="d-flex align-items-center justify-content-between py-3 px-4">
+                <!-- Left: Back Button -->
+                <div class="header-wraper">
+                    <button class="btn btn-outline btn-sm back-to-sales-btn" onclick="salesManagement.hideInvoicePreview()">
+                        <i class="fas fa-arrow-left"></i> Back to Sales
+                    </button>
+                    <!-- Center: Title -->
+                <div class="text-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-receipt text-primary me-2"></i>
+                        <span id="invoice-preview-title">Sales Invoice Preview</span>
+                        <small class="text-muted" id="invoice-preview-number">#INV-00000</small>
+                    </h4>
+                </div>
+                <!-- Right: Status Badges -->
+                <div class="d-flex align-items-center">
+                    <div class="me-2">
+                        <span id="invoice-status-badge" class="badge bg-success me-1">Paid</span>
+                        <span id="invoice-payment-badge" class="badge bg-info status-completed">Completed</span>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons Row -->
+        <div class="action-bar bg-light border-bottom py-2 px-4">
+            <div class="d-flex justify-content-end">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.emailInvoiceFromPreview()" title="Email Invoice">
+                        <i class="fas fa-envelope me-1"></i> Email
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.shareInvoice()" title="Share Invoice">
+                        <i class="fas fa-share-alt me-1"></i> Share
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.downloadInvoice()" title="Download PDF">
+                        <i class="fas fa-download me-1"></i> PDF
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.printThermalInvoice()" title="Thermal Print">
+                        <i class="fas fa-print me-1"></i> Thermal
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="salesManagement.printInvoice()" title="Print Invoice">
+                        <i class="fas fa-print me-1"></i> Print
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Preview Content -->
+        <div class="preview-content py-4 px-4">
+            <div id="invoice-preview-content" class="bg-white rounded shadow-sm">
+                <!-- Invoice content will be loaded here -->
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h4>Loading invoice preview...</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Business Management Page -->
+<div id="businesses-page" class="page-content d-none">
+    <div class="dashboard-header">
+        <div class="dashboard-title">
+            <h1>Business Management</h1>
+            <p>Manage your businesses and switch between them</p>
+        </div>
                     <div class="header-actions">
                         <button class="btn btn-primary" onclick="showCreateBusinessModal()">
                             <i class="fas fa-plus"></i> Create New Business
@@ -699,7 +921,7 @@
                 </div>
             </div>
 
-            <!-- Parties Management Page -->
+<!-- Parties Management Page -->
 <div id="parties-page" class="page-content d-none">
     <div class="dashboard-header">
         <div class="dashboard-title">
@@ -736,13 +958,14 @@
         </div>
     </div>
 
-    <!-- Search and Filter Bar -->
+    <!-- Search and Filter Bar - All in One Row -->
+<div class="party-filter-bar">
     <div class="party-search-container">
         <i class="fas fa-search party-search-icon"></i>
-        <input type="text" id="party-search" class="form-control party-search-input" placeholder="Search parties by name, email, phone...">
+        <input type="text" id="party-search" class="form-control party-search-input" placeholder="Search parties...">
     </div>
-
-    <div class="party-filters">
+    
+    <div class="party-filters-row">
         <select id="party-type-filter" class="form-control party-filter-select" onchange="loadParties()">
             <option value="">All Types</option>
             <option value="customer">Customers</option>
@@ -763,10 +986,11 @@
             <option value="zero">Zero Balance</option>
         </select>
         
-        <button class="btn btn-outline" onclick="clearPartyFilters()">
+        <button class="btn clear-filter-btn" onclick="clearPartyFilters()">
             <i class="fas fa-times"></i> Clear Filters
         </button>
     </div>
+</div>
 
     <!-- Party Groups -->
     <div class="party-groups">
@@ -2069,6 +2293,7 @@
     <script src="js/parties.js"></script>
     <script src="js/sales.js"></script>
     <script src="js/notifications.js"></script>
+    <script src="js/shortcuts.js"></script>
 
     <script>
         // Initialize the application

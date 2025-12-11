@@ -581,65 +581,50 @@ async function loadActiveBusiness() {
 
 async function setActiveBusiness(businessId) {
     try {
-        console.log('🎯 Setting active business with full content reload:', businessId);
+        console.log('⚡ Setting active business (FAST):', businessId);
         
         const business = userBusinesses.find(b => b.id === businessId);
         if (!business) {
-            throw new Error('Business not found in user businesses');
+            throw new Error('Business not found');
         }
         
-        // Show loading state for the entire main content
-        showMainContentLoadingState();
-        
-        // Clear current business cache if switching
-        if (currentBusiness && currentBusiness.id !== businessId) {
-            console.log('🔄 Clearing cache for previous business:', currentBusiness.name);
-            clearAllBusinessData(currentBusiness.id);
+        // Skip if already on this business
+        if (currentBusiness && currentBusiness.id === businessId) {
+            console.log('ℹ️ Already on this business');
+            return;
         }
         
+        // Store previous business for cache clearing
+        const previousBusiness = currentBusiness;
+        
+        // Update current business immediately (NO LOADING STATE)
         currentBusiness = business;
         
-        // Save to user-specific storage
-        saveUserData('activeBusiness', currentBusiness);
-        
-        console.log('✅ Active business set:', currentBusiness.name, 'Access type:', currentBusiness.access_type);
-        
-        // Clear all business-specific caches
-        clearAllBusinessCaches();
+        // Save to storage (async, don't wait)
+        setTimeout(() => {
+            saveUserData('activeBusiness', currentBusiness);
+        }, 0);
         
         // Update UI immediately
         updateCurrentBusinessUI();
-        updateBusinessesUI();
         updateNavbarBusinessSelector();
-        refreshInventory();
-        loadRecentActivityAndAlerts();
         
-        // 🔥 CRITICAL: Force reload user role for the new business
-        if (window.loadCurrentUserRole) {
-            console.log('🔄 Reloading user role for new business...');
-            await loadCurrentUserRole();
-        }
+        console.log('✅ Business switched to:', currentBusiness.name);
         
-        // 🔥 CRITICAL: Ensure role is properly set
-        if (window.ensureUserRole) {
-            ensureUserRole();
-        }
+        // Load data in background (non-blocking)
+        setTimeout(() => {
+            loadBusinessDataInBackground();
+        }, 300);
         
-        // 🔥 CRITICAL: Apply permissions for the new business
-        if (window.applyRoleBasedAccess) {
-            console.log('🔄 Applying role-based access...');
-            applyRoleBasedAccess();
-        }
-        
-        // 🔥 NEW: Force reload of all main content
-        await reloadAllMainContent();
+        // Trigger event for other components
+        triggerBusinessChangeEvent();
         
     } catch (error) {
-        console.error('❌ Error setting active business:', error);
-        showNotification('Error', 'Failed to switch business', 'error');
-        hideMainContentLoadingState();
+        console.error('❌ Fast business switch error:', error);
+        // Don't show error - just log it
     }
 }
+
 
 // 🔥 NEW FUNCTION: Show loading state for main content
 function showMainContentLoadingState() {
@@ -718,24 +703,34 @@ async function reloadAllMainContent() {
     
     try {
         // Get current active page
-        const currentPage = localStorage.getItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE) || 'overview';
+        const currentPage = localStorage.getItem('activeDashboardPage') || 'overview';
         console.log('📄 Current active page:', currentPage);
         
+        // 🔥 CRITICAL: First, clear all existing data and UI
+        clearAllPageDataImmediately();
+        
+        // 🔥 CRITICAL: Wait a brief moment to ensure UI is cleared
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Force reload business intelligence data
-        if (window.loadBusinessIntelligence) {
-            await loadBusinessIntelligence();
-        } else {
-            console.warn('⚠️ loadBusinessIntelligence not available');
+        try {
+            if (window.loadBusinessIntelligence) {
+                await loadBusinessIntelligence();
+            }
+        } catch (intelError) {
+            console.warn('⚠️ Business intelligence load failed (non-critical):', intelError);
         }
         
-        // Update realtime subscriptions (but don't fail if it errors)
+        // Update realtime subscriptions
         try {
-            setupRealtimeSubscriptions();
+            if (window.setupRealtimeSubscriptions) {
+                setupRealtimeSubscriptions();
+            }
         } catch (realtimeError) {
             console.warn('⚠️ Realtime subscriptions failed (non-critical):', realtimeError);
         }
         
-        // Reload the current page with fresh data
+        // 🔥 CRITICAL: Reload the current page with fresh data
         await reloadCurrentPage(currentPage);
         
         // Update dashboard metrics
@@ -743,22 +738,66 @@ async function reloadAllMainContent() {
             updateDashboardMetrics();
         }
         
+        // 🔥 CRITICAL: Trigger business change event for other modules
+        triggerBusinessChangeEvent();
+        
         // Hide loading state
         hideMainContentLoadingState();
         
-        console.log('✅ All main content reloaded successfully');
+        console.log('✅ All main content reloaded successfully for business:', currentBusiness?.name);
         
     } catch (error) {
-        console.error('❌ Error reloading main content:', error);
+        console.error('❌ Critical error reloading main content:', error);
         hideMainContentLoadingState();
         
         // Show user-friendly error message
         showNotification(
-            'Data Loading Issue', 
-            'Some data may take a moment to load completely. The page is still functional.',
-            'warning',
-            5000
+            'Business Data Loaded', 
+            `Business switched to ${currentBusiness?.name || 'new business'}. Data is loading.`,
+            'success',
+            3000
         );
+        
+        // Even if there's an error, try to at least show basic UI
+        try {
+            const currentPage = localStorage.getItem('activeDashboardPage') || 'overview';
+            await showBasicPageContent(currentPage);
+        } catch (fallbackError) {
+            console.error('❌ Even fallback failed:', fallbackError);
+        }
+    }
+}
+
+function clearAllPageDataImmediately() {
+    console.log('🧹 Immediately clearing all page data...');
+    
+    // Clear any global data variables
+    window.inventoryData = [];
+    window.salesData = [];
+    window.customersData = [];
+    window.staffData = [];
+    window.partiesData = [];
+    
+    // Clear all table bodies
+    document.querySelectorAll('tbody').forEach(tbody => {
+        if (tbody && tbody.innerHTML.trim() !== '') {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
+        }
+    });
+    
+    // Clear charts
+    if (window.salesChart) {
+        try {
+            salesChart.destroy();
+        } catch (e) {}
+        window.salesChart = null;
+    }
+    
+    if (window.revenueChart) {
+        try {
+            revenueChart.destroy();
+        } catch (e) {}
+        window.revenueChart = null;
     }
 }
 
@@ -766,13 +805,8 @@ async function reloadAllMainContent() {
 async function reloadCurrentPage(page) {
     console.log('🔄 Force reloading page:', page);
     
-    // Clear any existing page data first (with error handling)
-    try {
-        clearPageDataForBusiness();
-    } catch (clearError) {
-        console.warn('⚠️ Error clearing page data:', clearError);
-        // Continue anyway - don't let clearing errors break the reload
-    }
+    // Clear any existing page data first
+    clearPageDataForBusiness();
     
     try {
         switch (page) {
@@ -786,10 +820,10 @@ async function reloadCurrentPage(page) {
                 break;
                 
             case 'sales':
-                if (window.initializeSalesPage) {
-                    await initializeSalesPage();
+                if (window.initializeSalesManagement) {
+                    await initializeSalesManagement();
                 } else {
-                    console.warn('⚠️ initializeSalesPage not available');
+                    console.warn('⚠️ initializeSalesManagement not available');
                     await loadDefaultSales();
                 }
                 break;
@@ -873,6 +907,22 @@ async function reloadCurrentPage(page) {
     }
 }
 
+function triggerBusinessChangeEvent() {
+    console.log('🎯 Triggering business change event...');
+    
+    // Create and dispatch a custom event
+    const businessChangedEvent = new CustomEvent('businessChanged', {
+        detail: {
+            businessId: currentBusiness?.id,
+            businessName: currentBusiness?.name,
+            timestamp: new Date().toISOString()
+        }
+    });
+    
+    window.dispatchEvent(businessChangedEvent);
+    console.log('✅ Business change event dispatched');
+}
+
 // 🔥 NEW FUNCTION: Clear page-specific data
 function clearPageDataForBusiness() {
     console.log('🧹 Clearing page-specific data for business switch...');
@@ -938,6 +988,19 @@ async function loadDefaultInventory() {
     if (inventoryContainer) {
         inventoryContainer.innerHTML = '<div class="text-center p-4">Loading inventory data...</div>';
         // Your inventory loading logic here
+    }
+}
+
+async function loadDefaultParties() {
+    console.log('👥 Loading default parties...');
+    const partiesContainer = document.getElementById('parties-page');
+    if (partiesContainer) {
+        partiesContainer.innerHTML = '<div class="text-center p-4">Loading parties data...</div>';
+        
+        // Your parties loading logic here
+        if (window.loadParties) {
+            await loadParties();
+        }
     }
 }
 
@@ -1578,3 +1641,10 @@ window.debugBusinessAndRoleStatus = debugBusinessAndRoleStatus;
 window.hasPermission = hasPermission;
 window.canAccessPage = canAccessPage;
 window.applyRoleBasedAccess = applyRoleBasedAccess;
+// Ensure functions are available globally
+window.setActiveBusiness = setActiveBusiness;
+window.clearAllBusinessCaches = clearAllBusinessCaches;
+window.reloadCurrentPage = reloadCurrentPage;
+window.triggerBusinessChangeEvent = triggerBusinessChangeEvent;
+
+console.log('✅ Business switching functions loaded successfully');

@@ -65,6 +65,19 @@ async function showDashboard() {
     }
 }
 
+if (window.addEventListener) {
+    window.addEventListener('businessChanged', async function() {
+        console.log('🏢 Business changed event received in dashboard.js');
+        
+        // Reload the current page
+        const currentPage = localStorage.getItem('activeDashboardPage') || 'overview';
+        console.log('🔄 Reloading current page after business change:', currentPage);
+        
+        // Force reload of current page
+        await showDashboardPage(currentPage);
+    });
+}
+
 // Enhanced navigation that doesn't reset on tab switch
 async function showDashboardPage(page) {
     if (isNavigating) {
@@ -72,28 +85,14 @@ async function showDashboardPage(page) {
         return;
     }
     
-    // Check permissions first
-    if (window.canAccessPage && !canAccessPage(page)) {
-        console.warn('🚫 Access denied to page:', page);
-        showNotification('Access Denied', 'You do not have permission to access this page.', 'error');
-        
-        // Find first accessible page
-        const accessiblePages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports'];
-        for (const accessiblePage of accessiblePages) {
-            if (canAccessPage(accessiblePage)) {
-                page = accessiblePage;
-                break;
-            }
-        }
-    }
-    
     isNavigating = true;
     
     try {
-        console.log('📄 Navigating to:', page);
+        console.log('📄 Navigating to:', page, 'for business:', currentBusiness?.name);
         
-        // Save current page to session storage
+        // Save current page
         sessionStorage.setItem('currentPage', page);
+        localStorage.setItem('activeDashboardPage', page);
         currentPage = page;
         
         // Hide all page contents
@@ -111,29 +110,60 @@ async function showDashboardPage(page) {
         }
         
         // Update active menu item
-        const menuItems = document.querySelectorAll('.sidebar-menu a');
-        menuItems.forEach(item => {
-            if (item && item.classList) {
-                item.classList.remove('active');
-            }
-        });
+        updateActiveNavigation(page);
         
-        const activeMenuItem = document.querySelector(`.sidebar-menu a[data-page="${page}"]`);
-        if (activeMenuItem) {
-            activeMenuItem.classList.add('active');
-        }
+        // Force re-initialize page content (don't use cache for business switching)
+        await forceInitializePageContent(page);
         
-        localStorage.setItem('activeDashboardPage', page);
-        
-        // Initialize page-specific content WITHOUT reloading everything
-        await initializePageContent(page);
-        
-        console.log('✅ Dashboard page shown:', page);
+        console.log('✅ Dashboard page shown:', page, 'for business:', currentBusiness?.name);
         
     } catch (error) {
         console.error('❌ Error showing dashboard page:', error);
     } finally {
         isNavigating = false;
+    }
+}
+
+// New function: Force initialize page content (no caching)
+async function forceInitializePageContent(page) {
+    try {
+        // Clear any cached data for this page
+        if (window.clearBusinessData) {
+            clearBusinessData(`${page}_data`);
+        }
+        
+        switch (page) {
+            case 'overview':
+                // Clear all cached data
+                clearDashboardData();
+                await initializeOverviewPage();
+                break;
+            case 'sales':
+                if (window.initializeSalesManagement) {
+                    await initializeSalesManagement();
+                }
+                break;
+            case 'inventory':
+                if (window.initializeInventoryPage) {
+                    await initializeInventoryPage();
+                }
+                break;
+            case 'staff':
+                if (window.initializeStaffManagement) {
+                    await initializeStaffManagement();
+                }
+                break;
+            case 'parties':
+                if (window.initializePartiesSystem) {
+                    await initializePartiesSystem();
+                }
+                break;
+            default:
+                console.log('ℹ️ No specific initialization for page:', page);
+        }
+    } catch (error) {
+        console.error(`❌ Error forcing initialization of page ${page}:`, error);
+        throw error;
     }
 }
 
@@ -160,6 +190,9 @@ async function initializePageContent(page) {
                     await initializeStaffManagement();
                 }
                 break;
+            case 'parties':
+                if (window.initializePartiesSystem) await initializePartiesSystem();
+                break;
             default:
                 console.log('ℹ️ No specific initialization for page:', page);
         }
@@ -175,7 +208,7 @@ function restoreLastPage() {
     // Check if user has access to the saved page
     if (window.canAccessPage && !canAccessPage(savedPage)) {
         // Find first accessible page
-        const accessiblePages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports'];
+        const accessiblePages = ['overview', 'sales', 'inventory', 'customers', 'staff', 'reports','parties'];
         for (const page of accessiblePages) {
             if (canAccessPage(page)) {
                 currentPage = page;
@@ -357,7 +390,7 @@ async function refreshDashboardOnStockChange() {
 window.updateDashboardLowStockCount = updateDashboardLowStockCount;
 window.refreshDashboardOnStockChange = refreshDashboardOnStockChange;
 
-function loadCharts() {
+async function loadCharts() {
     try {
         const salesChartEl = document.getElementById('salesChart');
         const revenueChartEl = document.getElementById('revenueChart');
@@ -368,78 +401,342 @@ function loadCharts() {
         }
         
         const period = document.getElementById('chart-period')?.value || 30;
+        console.log(`📊 Loading charts for period: ${period} days`);
         
-        // Destroy existing charts
-        if (salesChart) salesChart.destroy();
-        if (revenueChart) revenueChart.destroy();
+        // 🔥 FIX: Safely destroy existing charts
+        if (salesChart && typeof salesChart.destroy === 'function') {
+            try {
+                salesChart.destroy();
+            } catch (e) {
+                console.warn('⚠️ Error destroying sales chart:', e);
+            }
+        }
         
-        // Sample data - replace with actual data from Supabase
-        const salesData = {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            datasets: [{
-                label: 'Sales',
-                data: [12, 19, 8, 15, 12, 18, 14],
-                backgroundColor: 'rgba(67, 97, 238, 0.2)',
-                borderColor: 'rgba(67, 97, 238, 1)',
-                borderWidth: 2,
-                tension: 0.4
-            }]
-        };
+        if (revenueChart && typeof revenueChart.destroy === 'function') {
+            try {
+                revenueChart.destroy();
+            } catch (e) {
+                console.warn('⚠️ Error destroying revenue chart:', e);
+            }
+        }
         
-        const revenueData = {
-            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-            datasets: [{
-                label: 'Revenue',
-                data: [1250, 1890, 1580, 2170],
-                backgroundColor: 'rgba(76, 201, 240, 0.2)',
-                borderColor: 'rgba(76, 201, 240, 1)',
-                borderWidth: 2,
-                tension: 0.4
-            }]
-        };
+        // 🔥 NEW: Load REAL sales data from database
+        const salesData = await loadRealSalesData(period);
+        const revenueData = await loadRealRevenueData(period);
         
-        // Create charts
+        // Create sales chart with real data
         const salesCtx = salesChartEl.getContext('2d');
         salesChart = new Chart(salesCtx, {
             type: 'line',
-            data: salesData,
+            data: {
+                labels: salesData.labels,
+                datasets: [{
+                    label: 'Daily Sales',
+                    data: salesData.data,
+                    backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                    borderColor: 'rgba(67, 97, 238, 1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Sales: ${context.raw}`;
+                            }
+                        }
                     }
                 },
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Sales'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
                     }
                 }
             }
         });
         
+        // Create revenue chart with real data
         const revenueCtx = revenueChartEl.getContext('2d');
         revenueChart = new Chart(revenueCtx, {
             type: 'bar',
-            data: revenueData,
+            data: {
+                labels: revenueData.labels,
+                datasets: [{
+                    label: 'Revenue (₹)',
+                    data: revenueData.data,
+                    backgroundColor: 'rgba(76, 201, 240, 0.6)',
+                    borderColor: 'rgba(76, 201, 240, 1)',
+                    borderWidth: 1
+                }]
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Revenue: ₹${context.raw.toLocaleString()}`;
+                            }
+                        }
                     }
                 },
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue (₹)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '₹' + value.toLocaleString();
+                            }
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
                     }
                 }
             }
         });
+        
+        console.log('✅ Charts loaded with real data');
+        
     } catch (error) {
         console.error('❌ Chart loading error:', error);
+        // Show fallback message
+        showChartFallback();
+    }
+}
+
+function showChartFallback() {
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+        const canvas = container.querySelector('canvas');
+        if (canvas) {
+            const parent = canvas.parentElement;
+            parent.innerHTML = `
+                <div class="chart-fallback" style="height: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                    <div class="text-center">
+                        <i class="fas fa-chart-line" style="font-size: 2rem; color: #6c757d; margin-bottom: 10px;"></i>
+                        <p style="color: #6c757d; margin-bottom: 5px;">Chart data unavailable</p>
+                        <small style="color: #adb5bd;">Check your internet connection or try again</small>
+                        <br>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadCharts()">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    });
+}
+
+function getDefaultChartData(days, isRevenue = false) {
+    const labels = [];
+    const data = [];
+    
+    if (isRevenue) {
+        // Weekly labels for revenue
+        const weeks = Math.ceil(days / 7);
+        for (let i = 1; i <= weeks; i++) {
+            labels.push(`Week ${i}`);
+            data.push(0);
+        }
+    } else {
+        // Daily labels for sales
+        for (let i = 0; i < days; i++) {
+            const date = new Date();
+            date.setDate(date.getDate() - (days - i - 1));
+            labels.push(date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }));
+            data.push(0);
+        }
+    }
+    
+    return { labels, data };
+}
+
+async function loadRealSalesData(days = 30) {
+    if (!currentBusiness?.id) {
+        console.warn('⚠️ No business selected for sales data');
+        return getDefaultChartData(days);
+    }
+    
+    try {
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        console.log(`📊 Loading sales data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+        
+        // Query sales data for the period
+        const { data: sales, error } = await supabase
+            .from('sales')
+            .select('created_at, total_amount')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString())
+            .order('created_at', { ascending: true });
+        
+        if (error) {
+            console.error('❌ Error loading sales data:', error);
+            return getDefaultChartData(days);
+        }
+        
+        if (!sales || sales.length === 0) {
+            console.log('ℹ️ No sales data found for period');
+            return getDefaultChartData(days);
+        }
+        
+        // Group sales by date
+        const salesByDate = {};
+        sales.forEach(sale => {
+            const date = new Date(sale.created_at).toISOString().split('T')[0];
+            if (!salesByDate[date]) {
+                salesByDate[date] = 0;
+            }
+            salesByDate[date]++;
+        });
+        
+        // Generate labels for all days in the period
+        const labels = [];
+        const data = [];
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayLabel = currentDate.toLocaleDateString('en-IN', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+            
+            labels.push(dayLabel);
+            data.push(salesByDate[dateStr] || 0);
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        console.log(`✅ Loaded ${sales.length} sales across ${labels.length} days`);
+        
+        return { labels, data };
+        
+    } catch (error) {
+        console.error('❌ Error processing sales data:', error);
+        return getDefaultChartData(days);
+    }
+}
+
+async function loadRealRevenueData(days = 30) {
+    if (!currentBusiness?.id) {
+        console.warn('⚠️ No business selected for revenue data');
+        return getDefaultChartData(days, true);
+    }
+    
+    try {
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        console.log(`💰 Loading revenue data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+        
+        // Query sales data for the period
+        const { data: sales, error } = await supabase
+            .from('sales')
+            .select('created_at, total_amount')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true)
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString())
+            .order('created_at', { ascending: true });
+        
+        if (error) {
+            console.error('❌ Error loading revenue data:', error);
+            return getDefaultChartData(days, true);
+        }
+        
+        if (!sales || sales.length === 0) {
+            console.log('ℹ️ No revenue data found for period');
+            return getDefaultChartData(days, true);
+        }
+        
+        // Group revenue by date
+        const revenueByDate = {};
+        sales.forEach(sale => {
+            const date = new Date(sale.created_at).toISOString().split('T')[0];
+            if (!revenueByDate[date]) {
+                revenueByDate[date] = 0;
+            }
+            revenueByDate[date] += (sale.total_amount || 0);
+        });
+        
+        // Generate weekly summaries
+        const weeklyLabels = [];
+        const weeklyRevenue = [];
+        
+        let weekStart = new Date(startDate);
+        let weekTotal = 0;
+        let weekNumber = 1;
+        
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            weekTotal += revenueByDate[dateStr] || 0;
+            
+            // End of week or end of period
+            if (currentDate.getDay() === 6 || currentDate.getTime() === endDate.getTime()) {
+                weeklyLabels.push(`Week ${weekNumber}`);
+                weeklyRevenue.push(weekTotal);
+                weekTotal = 0;
+                weekNumber++;
+            }
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        // If we have leftover days
+        if (weekTotal > 0) {
+            weeklyLabels.push(`Week ${weekNumber}`);
+            weeklyRevenue.push(weekTotal);
+        }
+        
+        console.log(`✅ Loaded revenue data: ${sales.length} sales, total ₹${weeklyRevenue.reduce((a, b) => a + b, 0).toLocaleString()}`);
+        
+        return { labels: weeklyLabels, data: weeklyRevenue };
+        
+    } catch (error) {
+        console.error('❌ Error processing revenue data:', error);
+        return getDefaultChartData(days, true);
     }
 }
 
@@ -859,14 +1156,14 @@ function updateFinancialUI(summary) {
 
 // Clear all dashboard data
 function clearDashboardData() {
-    console.log('🧹 Clearing dashboard data...');
+    console.log('🧹 Safely clearing dashboard data...');
     
     // Clear dashboard metrics
     const metricIds = [
         'today-sales', 'today-revenue', 'low-stock-count',
         'total-sales-count', 'total-sales-amount', 'pending-invoices',
         'avg-sale-value', 'total-products', 'total-stock-value',
-        'out-of-stock-count', 'low-stock-count'
+        'out-of-stock-count'
     ];
     
     metricIds.forEach(id => {
@@ -876,13 +1173,24 @@ function clearDashboardData() {
         }
     });
     
-    // Clear charts
-    if (window.salesChart) {
-        salesChart.destroy();
+    // 🔥 FIX: Safely destroy charts only if they exist
+    if (salesChart && typeof salesChart.destroy === 'function') {
+        try {
+            salesChart.destroy();
+            console.log('✅ Sales chart destroyed');
+        } catch (error) {
+            console.warn('⚠️ Error destroying sales chart:', error);
+        }
         salesChart = null;
     }
-    if (window.revenueChart) {
-        revenueChart.destroy();
+    
+    if (revenueChart && typeof revenueChart.destroy === 'function') {
+        try {
+            revenueChart.destroy();
+            console.log('✅ Revenue chart destroyed');
+        } catch (error) {
+            console.warn('⚠️ Error destroying revenue chart:', error);
+        }
         revenueChart = null;
     }
     
