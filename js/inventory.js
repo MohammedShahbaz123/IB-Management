@@ -7,6 +7,7 @@
     let currentProductDetails = null;
     let currentFilterType = ''; // 'low_stock', 'out_of_stock', or ''
     let filteredProducts = []; // Store filtered products
+    let isSavingBulkChanges = false;
 
     // Global initialization function
     async function initializeInventorySystem() {
@@ -24,6 +25,9 @@
         
         console.log('📦 Initializing inventory page for business:', currentBusiness?.name);
         await initializeInventoryPage();
+        addBulkSaveProgressStyles()
+        setupBulkEditorUnsavedChangesWarning();
+
     }
 
     // Wait for business context to be available
@@ -67,8 +71,10 @@
             await loadInventoryProducts();
             setupInventoryEventListeners();
             setupInventoryShortcuts();
+             setupActionDropdownListeners();
             updateDashboardMetrics();
             populateCategoryFilters();
+             addActionDropdownStyles();
             
             console.log('✅ Inventory page initialized successfully for business:', currentBusiness?.name);
         } catch (error) {
@@ -403,158 +409,300 @@
 
     // Replace the editProduct click handler with showProductDetails
     function displayInventoryProducts(products) {
-        const container = document.getElementById('inventory-table-body');
-        if (!container) return;
-        
-        console.log(`🔄 Displaying ${products.length} products in table`);
-        
-        if (products.length === 0) {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="10" class="text-center" style="padding: 3rem;">
-                        <div style="color: #6c757d;">
-                            <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                            <h4>No products found</h4>
-                            <p>Get started by adding your first product</p>
-                            <button class="btn btn-primary mt-2" onclick="showAddProductModal()">
-                                <i class="fas fa-plus"></i> Add Product
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        container.innerHTML = products.map(product => `
-            <tr class="clickable-row" onclick="showProductDetails('${product.id}')">
-                <td>
-                    <div class="d-flex align-items-center">
-                        <div>
-                            <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
-                            <div style="font-size: 0.8rem; color: #6c757d;">${product.category || 'Uncategorized'}</div>
-                        </div>
-                    </div>
-                </td>
-                <td>${product.sku || '-'}</td>
-                <td>
-                    <div style="font-weight: 600; color: ${getStockColor(product.current_stock, product.reorder_level)}">
-                        ${product.current_stock} ${product.unit || 'pcs'}
-                    </div>
-                </td>
-                <td>${formatCurrency(product.cost_price || 0)}</td>
-                <td>${formatCurrency(product.selling_price || 0)}</td>
-                <td>${formatCurrency((product.current_stock || 0) * (product.cost_price || 0))}</td>
-                <td>
-                    <span class="stock-status ${getStockStatusClass(product.current_stock, product.reorder_level)}">
-                        ${getStockStatusText(product.current_stock, product.reorder_level)}
-                    </span>
-                </td>
-                <td>
-                    <div class="action-buttons">
-                        ${hasPermission('products', 'edit') ? `
-                            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); editProduct('${product.id}')" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        ` : ''}
-                        ${hasPermission('inventory', 'adjust') ? `
-                            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); adjustStock('${product.id}')" title="Adjust Stock">
-                                <i class="fas fa-exchange-alt"></i>
-                            </button>
-                            <button class="btn btn-outline btn-sm btn-danger" onclick="event.stopPropagation(); deleteProduct('${product.id}')" title="Delete">
-                            <i class="fas fa-trash"></i>
+    const container = document.getElementById('inventory-table-body');
+    if (!container) return;
+    
+    console.log(`🔄 Displaying ${products.length} products in table`);
+    
+    if (products.length === 0) {
+        container.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center" style="padding: 3rem;">
+                    <div style="color: #6c757d;">
+                        <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <h4>No products found</h4>
+                        <p>Get started by adding your first product</p>
+                        <button class="btn btn-primary mt-2" onclick="showAddProductModal()">
+                            <i class="fas fa-plus"></i> Add Product
                         </button>
-                        ` : ''}
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `;
+        return;
     }
+    
+    container.innerHTML = products.map(product => `
+        <tr class="clickable-row" onclick="showProductDetails('${product.id}')">
+            <td>
+                <div class="d-flex align-items-center">
+                    <div>
+                        <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
+                        <div style="font-size: 0.8rem; color: #6c757d;">${product.category || 'Uncategorized'}</div>
+                    </div>
+                </div>
+            </td>
+            <td>${product.sku || '-'}</td>
+            <td>
+                <div style="font-weight: 600; color: ${getStockColor(product.current_stock, product.reorder_level)}">
+                    ${product.current_stock} ${product.unit || 'pcs'}
+                </div>
+            </td>
+            <td>${formatCurrency(product.cost_price || 0)}</td>
+            <td>${formatCurrency(product.selling_price || 0)}</td>
+            <td>${formatCurrency((product.current_stock || 0) * (product.cost_price || 0))}</td>
+            <td>
+                <span class="stock-status ${getStockStatusClass(product.current_stock, product.reorder_level)}">
+                    ${getStockStatusText(product.current_stock, product.reorder_level)}
+                </span>
+            </td>
+            <td>
+                <div class="action-dropdown">
+                    <button class="action-dots" onclick="event.stopPropagation(); toggleActionDropdown('${product.id}')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div class="action-dropdown-menu" id="action-dropdown-${product.id}">
+                        ${hasPermission('products', 'edit') ? `
+                            <button class="action-dropdown-item" onclick="event.stopPropagation(); editProduct('${product.id}')">
+    <i class="fas fa-edit"></i> Edit
+</button>
+                        ` : ''}
+                        ${hasPermission('inventory', 'adjust') ? `
+                            <button class="action-dropdown-item" onclick="event.stopPropagation(); adjustStock('${product.id}')">
+    <i class="fas fa-exchange-alt"></i> Adjust Stock
+</button>
+                        ` : ''}
+                        ${hasPermission('products', 'delete') ? `
+                            <button class="action-dropdown-item text-danger" onclick="event.stopPropagation(); deleteProduct('${product.id}')">
+    <i class="fas fa-trash"></i> Delete
+</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function setupActionDropdownListeners() {
+    // Close dropdowns when clicking anywhere else
+    document.addEventListener('click', function(event) {
+        // Check if click is outside dropdown
+        if (!event.target.closest('.action-dropdown') && 
+            !event.target.closest('.action-dropdown-menu')) {
+            document.querySelectorAll('.action-dropdown-menu.show').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        }
+    });
+    
+    // Stop row click when clicking on dropdown buttons
+    document.addEventListener('click', function(event) {
+        if (event.target.closest('.action-dropdown-item') || 
+            event.target.closest('.action-dots')) {
+            event.stopPropagation();
+        }
+    });
+}
+
+// Toggle action dropdown
+function toggleActionDropdown(productId) {
+    // Close all other dropdowns first
+    document.querySelectorAll('.action-dropdown-menu.show').forEach(dropdown => {
+        if (dropdown.id !== `action-dropdown-${productId}`) {
+            dropdown.classList.remove('show');
+        }
+    });
+    
+    // Toggle current dropdown
+    const dropdown = document.getElementById(`action-dropdown-${productId}`);
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.action-dropdown')) {
+        document.querySelectorAll('.action-dropdown-menu.show').forEach(dropdown => {
+            dropdown.classList.remove('show');
+        });
+    }
+});
+
+// Add this function to inject the CSS styles
+function addActionDropdownStyles() {
+    if (!document.getElementById('action-dropdown-styles')) {
+        const style = document.createElement('style');
+        style.id = 'action-dropdown-styles';
+        style.textContent = `
+            .action-dropdown {
+                position: relative;
+                display: inline-block;
+                cursor: pointer;
+            }
+            
+            .action-dots {
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+                padding: 5px 10px;
+                border-radius: 4px;
+                transition: all 0.2s;
+                font-size: 1.2rem;
+            }
+            
+            .action-dots:hover {
+                background: #f8f9fa;
+                color: #495057;
+            }
+            
+            .action-dropdown-menu {
+                position: absolute;
+                top: 100%;
+                right: 0;
+                background: white;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+                min-width: 160px;
+                z-index: 1000;
+                display: none;
+                padding: 5px 0;
+                margin-top: 5px;
+            }
+            
+            .action-dropdown-menu.show {
+                display: block;
+                animation: fadeIn 0.2s ease;
+            }
+            
+            .action-dropdown-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                padding: 8px 16px;
+                border: none;
+                background: none;
+                text-align: left;
+                color: #495057;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: all 0.2s;
+                white-space: nowrap;
+            }
+            
+            .action-dropdown-item:hover {
+                background: #f8f9fa;
+                color: #212529;
+            }
+            
+            .action-dropdown-item i {
+                width: 16px;
+                text-align: center;
+            }
+            
+            .action-dropdown-item.text-danger {
+                color: #dc3545;
+            }
+            
+            .action-dropdown-item.text-danger:hover {
+                background: #f8d7da;
+                color: #721c24;
+            }
+            
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-5px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            /* Ensure clickable rows still work with dropdown */
+            .clickable-row {
+                cursor: pointer;
+            }
+            
+            .clickable-row:hover {
+                background-color: #f8f9fa;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
 
     // Edit current product from details page
     function editCurrentProduct() {
-        console.log('✏️ Attempting to edit current product...');
-        console.log('📊 currentProductDetails:', currentProductDetails);
-        
-        if (!currentProductDetails || !currentProductDetails.id) {
-            console.error('❌ Cannot edit: currentProductDetails is null or missing ID');
-            showNotification('Error', 'No product selected or product data is incomplete.', 'error');
-            return;
-        }
-        
-        if (!hasPermission('products', 'edit')) {
-            console.error('❌ No permission to edit products');
-            showNotification('Error', 'You do not have permission to edit products', 'error');
-            return;
-        }
-        
-        console.log('✏️ Editing product:', currentProductDetails.id);
-        
-        // Store the product ID before hiding the details
-        const productId = currentProductDetails.id;
-        
-        // Hide product details page
-        hideProductDetails();
-        
-        // Edit the product immediately (no setTimeout needed)
-        editProduct(productId);
+    console.log('✏️ Attempting to edit current product...');
+    console.log('📊 currentProductDetails:', currentProductDetails);
+    
+    if (!currentProductDetails || !currentProductDetails.id) {
+        console.error('❌ Cannot edit: currentProductDetails is null or missing ID');
+        showNotification('Error', 'No product selected or product data is incomplete.', 'error');
+        return;
     }
+    
+    if (!hasPermission('products', 'edit')) {
+        console.error('❌ No permission to edit products');
+        showNotification('Error', 'You do not have permission to edit products', 'error');
+        return;
+    }
+    
+    console.log('✏️ Editing product:', currentProductDetails.id);
+    
+    // Call editProduct directly WITHOUT hiding details page
+    editProduct(currentProductDetails.id);
+}
 
     // Adjust current product stock from details page
     function adjustCurrentProductStock() {
-        console.log('📦 Attempting to adjust stock for current product...');
-        
-        if (!currentProductDetails || !currentProductDetails.id) {
-            console.error('❌ Cannot adjust stock: currentProductDetails is null or missing ID');
-            showNotification('Error', 'No product selected or product data is incomplete.', 'error');
-            return;
-        }
-        
-        if (!hasPermission('inventory', 'adjust')) {
-            console.error('❌ No permission to adjust stock');
-            showNotification('Error', 'You do not have permission to adjust stock', 'error');
-            return;
-        }
-        
-        console.log('📦 Adjusting stock for product:', currentProductDetails.id);
-        
-        // Store the product ID before hiding the details
-        const productId = currentProductDetails.id;
-        
-        // Hide product details page
-        hideProductDetails();
-        
-        // Adjust stock immediately
-        adjustStock(productId);
+    console.log('📦 Attempting to adjust stock for current product...');
+    
+    if (!currentProductDetails || !currentProductDetails.id) {
+        console.error('❌ Cannot adjust stock: currentProductDetails is null or missing ID');
+        showNotification('Error', 'No product selected or product data is incomplete.', 'error');
+        return;
     }
+    
+    if (!hasPermission('inventory', 'adjust')) {
+        console.error('❌ No permission to adjust stock');
+        showNotification('Error', 'You do not have permission to adjust stock', 'error');
+        return;
+    }
+    
+    console.log('📦 Adjusting stock for product:', currentProductDetails.id);
+    
+    // Call adjustStock directly WITHOUT hiding details page
+    adjustStock(currentProductDetails.id);
+}
 
     // Delete current product from details page
     function deleteCurrentProduct() {
-        console.log('🗑️ Attempting to delete current product...');
-        
-        if (!currentProductDetails || !currentProductDetails.id) {
-            console.error('❌ Cannot delete: currentProductDetails is null or missing ID');
-            showNotification('Error', 'No product selected or product data is incomplete.', 'error');
-            return;
-        }
-        
-        if (!hasPermission('products', 'delete')) {
-            console.error('❌ No permission to delete products');
-            showNotification('Error', 'You do not have permission to delete products', 'error');
-            return;
-        }
-        
-        console.log('🗑️ Deleting product:', currentProductDetails.id);
-        
-        // Store the product ID before hiding the details
-        const productId = currentProductDetails.id;
-        
-        // Hide product details page
-        hideProductDetails();
-        
-        // Delete the product immediately
-        deleteProduct(productId);
+    console.log('🗑️ Attempting to delete current product...');
+    
+    if (!currentProductDetails || !currentProductDetails.id) {
+        console.error('❌ Cannot delete: currentProductDetails is null or missing ID');
+        showNotification('Error', 'No product selected or product data is incomplete.', 'error');
+        return;
     }
+    
+    if (!hasPermission('products', 'delete')) {
+        console.error('❌ No permission to delete products');
+        showNotification('Error', 'You do not have permission to delete products', 'error');
+        return;
+    }
+    
+    console.log('🗑️ Deleting product:', currentProductDetails.id);
+    
+    // Call deleteProduct directly WITHOUT hiding details page
+    deleteProduct(currentProductDetails.id);
+}
 
     // Show product details page
     async function showProductDetails(productId) {
@@ -962,34 +1110,43 @@
     }
 
     async function editProduct(productId) {
-        try {
-            const product = inventoryData.find(p => p.id === productId);
-            if (!product) {
-                throw new Error('Product not found');
-            }
+    console.log('✏️ Editing product:', productId);
+    
+    try {
+        // Don't navigate to product details page
+        // Just fetch the product data and show the edit modal
+        
+        const { data: product, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', productId)
+            .single();
+        
+        if (error) throw error;
+        if (!product) throw new Error('Product not found');
 
-            const modal = document.getElementById('edit-product-modal');
-            if (modal) {
-                // Populate form with product data
-                document.getElementById('edit-product-id').value = product.id;
-                document.getElementById('edit-product-name').value = product.name;
-                document.getElementById('edit-product-sku').value = product.sku || '';
-                document.getElementById('edit-product-category').value = product.category || '';
-                document.getElementById('edit-product-unit').value = product.unit || 'pcs';
-                document.getElementById('edit-product-cost').value = product.cost_price || 0;
-                document.getElementById('edit-product-price').value = product.selling_price || 0;
-                document.getElementById('edit-product-stock').value = product.current_stock || 0;
-                document.getElementById('edit-product-reorder').value = product.reorder_level || 0;
-                document.getElementById('edit-product-description').value = product.description || '';
-                
-                modal.classList.remove('d-none');
-                document.getElementById('edit-product-name').focus();
-            }
-        } catch (error) {
-            console.error('❌ Edit product error:', error);
-            showNotification('Error', 'Failed to load product data', 'error');
+        const modal = document.getElementById('edit-product-modal');
+        if (modal) {
+            // Populate form with product data
+            document.getElementById('edit-product-id').value = product.id;
+            document.getElementById('edit-product-name').value = product.name;
+            document.getElementById('edit-product-sku').value = product.sku || '';
+            document.getElementById('edit-product-category').value = product.category || '';
+            document.getElementById('edit-product-unit').value = product.unit || 'pcs';
+            document.getElementById('edit-product-cost').value = product.cost_price || 0;
+            document.getElementById('edit-product-price').value = product.selling_price || 0;
+            document.getElementById('edit-product-stock').value = product.current_stock || 0;
+            document.getElementById('edit-product-reorder').value = product.reorder_level || 0;
+            document.getElementById('edit-product-description').value = product.description || '';
+            
+            modal.classList.remove('d-none');
+            document.getElementById('edit-product-name').focus();
         }
+    } catch (error) {
+        console.error('❌ Edit product error:', error);
+        showNotification('Error', 'Failed to load product data', 'error');
     }
+}
 
     function hideEditProductModal() {
         const modal = document.getElementById('edit-product-modal');
@@ -1000,40 +1157,44 @@
     }
 
     async function adjustStock(productId) {
-        try {
-            const product = inventoryData.find(p => p.id === productId);
-            if (!product) {
-                throw new Error('Product not found');
-            }
+    try {
+        // Fetch product directly without going to details page
+        const { data: product, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', productId)
+            .single();
+            
+        if (error) throw error;
+        if (!product) throw new Error('Product not found');
 
-            const modal = document.getElementById('adjust-stock-modal');
-            if (modal) {
-                // Populate form with product data
-                document.getElementById('adjust-product-id').value = product.id;
-                document.getElementById('adjust-current-stock').value = product.current_stock;
-                document.getElementById('adjust-product-name').textContent = product.name;
-                document.getElementById('adjust-product-sku').textContent = product.sku || 'No SKU';
-                document.getElementById('adjust-product-category').textContent = product.category || 'Uncategorized';
-                document.getElementById('adjust-current-stock-display').textContent = product.current_stock;
-                document.getElementById('adjust-current-stock-display').className = `stock-status ${getStockStatusClass(product.current_stock, product.reorder_level)}`;
-                
-                // Reset form
-                document.getElementById('adjust-quantity').value = '';
-                document.querySelector('input[name="adjustment-type"][value="add"]').checked = true;
-                document.getElementById('adjust-reason').value = 'restock';
-                document.getElementById('adjust-notes').value = '';
-                
-                updateStockPreview();
-                
-                modal.classList.remove('d-none');
-                document.getElementById('adjust-quantity').focus();
-            }
-        } catch (error) {
-            console.error('❌ Adjust stock error:', error);
-            showNotification('Error', 'Failed to load product data', 'error');
+        const modal = document.getElementById('adjust-stock-modal');
+        if (modal) {
+            // Populate form with product data
+            document.getElementById('adjust-product-id').value = product.id;
+            document.getElementById('adjust-current-stock').value = product.current_stock;
+            document.getElementById('adjust-product-name').textContent = product.name;
+            document.getElementById('adjust-product-sku').textContent = product.sku || 'No SKU';
+            document.getElementById('adjust-product-category').textContent = product.category || 'Uncategorized';
+            document.getElementById('adjust-current-stock-display').textContent = product.current_stock;
+            document.getElementById('adjust-current-stock-display').className = `stock-status ${getStockStatusClass(product.current_stock, product.reorder_level)}`;
+            
+            // Reset form
+            document.getElementById('adjust-quantity').value = '';
+            document.querySelector('input[name="adjustment-type"][value="add"]').checked = true;
+            document.getElementById('adjust-reason').value = 'restock';
+            document.getElementById('adjust-notes').value = '';
+            
+            updateStockPreview();
+            
+            modal.classList.remove('d-none');
+            document.getElementById('adjust-quantity').focus();
         }
-        loadRecentActivityAndAlerts();
+    } catch (error) {
+        console.error('❌ Adjust stock error:', error);
+        showNotification('Error', 'Failed to load product data', 'error');
     }
+}
 
     function hideAdjustStockModal() {
         const modal = document.getElementById('adjust-stock-modal');
@@ -1705,168 +1866,709 @@
         }
     }
 
+    // Function to show simple loading on save button
+function showSaveButtonLoading() {
+    const saveButton = document.querySelector('#bulk-editor-modal button[onclick*="saveBulkEditorChanges"]');
+    if (saveButton) {
+        const originalHTML = saveButton.innerHTML;
+        saveButton.setAttribute('data-original-html', originalHTML);
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        saveButton.disabled = true;
+        
+        // Also disable other buttons in the modal
+        document.querySelectorAll('#bulk-editor-modal button').forEach(btn => {
+            if (btn !== saveButton) {
+                btn.disabled = true;
+            }
+        });
+    }
+}
+
+function restoreSaveButton() {
+    const saveButton = document.querySelector('#bulk-editor-modal button[onclick*="saveBulkEditorChanges"]');
+    if (saveButton && saveButton.getAttribute('data-original-html')) {
+        saveButton.innerHTML = saveButton.getAttribute('data-original-html');
+        saveButton.disabled = false;
+        
+        // Re-enable other buttons
+        document.querySelectorAll('#bulk-editor-modal button').forEach(btn => {
+            btn.disabled = false;
+        });
+    }
+}
+
+// Warn user before leaving bulk editor with unsaved changes
+function setupBulkEditorUnsavedChangesWarning() {
+    // Prevent browser default beforeunload behavior
+    window.addEventListener('beforeunload', function (e) {
+        if (isBulkEditorOpen && hasUnsavedBulkChanges() && !isSavingBulkChanges) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes in the bulk editor. Are you sure you want to leave?';
+            return 'You have unsaved changes in the bulk editor. Are you sure you want to leave?';
+        }
+    });
+    
+    // Also handle navigation within the app
+    document.addEventListener('click', function(e) {
+        // Check if user is trying to navigate away from bulk editor
+        if (!isBulkEditorOpen || isSavingBulkChanges) return;
+        
+        const target = e.target;
+        const isNavigationLink = 
+            target.tagName === 'A' && 
+            target.getAttribute('href') && 
+            !target.getAttribute('href').startsWith('#') &&
+            !target.closest('#bulk-editor-modal');
+        
+        if (isNavigationLink && hasUnsavedBulkChanges()) {
+            e.preventDefault();
+            showUnsavedChangesConfirmation().then((shouldLeave) => {
+                if (shouldLeave) {
+                    window.location.href = target.getAttribute('href');
+                }
+            });
+        }
+    });
+}
+
+// Check if there are unsaved changes in bulk editor
+function hasUnsavedBulkChanges() {
+    return bulkEditorData.some(product => product._hasChanges);
+}
+
+// Function to show unsaved changes confirmation
+function showUnsavedChangesConfirmation() {
+    return new Promise((resolve) => {
+        // Create confirmation modal
+        const modalHTML = `
+            <div id="unsaved-changes-modal" style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            ">
+                <div style="
+                    background: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    text-align: center;
+                    min-width: 400px;
+                    max-width: 500px;
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+                ">
+                    <div style="margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ffc107;"></i>
+                        <h3 style="margin: 15px 0 10px; color: #333;">Unsaved Changes</h3>
+                        <p style="color: #666; line-height: 1.5;">
+                            You have unsaved changes in the bulk editor. 
+                            If you leave now, these changes will be lost.
+                        </p>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: center; gap: 15px; margin-top: 25px;">
+                        <button id="stay-btn" style="
+                            padding: 10px 25px;
+                            background: #6c757d;
+                            color: white;
+                            border: none;
+                            border-radius: 5px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-times"></i> Stay on Page
+                        </button>
+                        <button id="leave-btn" style="
+                            padding: 10px 25px;
+                            background: #dc3545;
+                            color: white;
+                            border: none;
+                            border-radius: 5px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-sign-out-alt"></i> Leave Anyway
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('unsaved-changes-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add new modal
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Setup event listeners
+        document.getElementById('stay-btn').onclick = () => {
+            hideUnsavedChangesModal();
+            resolve(false); // User chose to stay
+        };
+        
+        document.getElementById('leave-btn').onclick = () => {
+            hideUnsavedChangesModal();
+            resolve(true); // User chose to leave
+        };
+    });
+}
+
+// Function to hide unsaved changes modal
+function hideUnsavedChangesModal() {
+    const modal = document.getElementById('unsaved-changes-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Function to navigate back to inventory page
+function navigateBackToInventory() {
+    console.log('🏠 Navigating back to inventory page...');
+    
+    // Hide bulk editor modal
+    hideBulkEditor();
+    
+    // Hide any other modals that might be open
+    hideBulkSaveProgress();
+    
+    // Make sure we're showing the inventory page
+    hideAllPages();
+    document.getElementById('inventory-page').classList.remove('d-none');
+    
+    // Update current page state
+    currentPage = 'inventory';
+    sessionStorage.setItem('currentPage', currentPage);
+    
+    // Refresh inventory data
+    loadInventoryProducts();
+    loadInventorySummary();
+    
+    // Focus on search if available
+    const searchInput = document.getElementById('inventory-search');
+    if (searchInput) {
+        setTimeout(() => {
+            searchInput.focus();
+        }, 100);
+    }
+    
+    console.log('✅ Returned to inventory page');
+}
+
     // Save all changes from bulk editor
     async function saveBulkEditorChanges() {
-        try {
-            console.log('💾 Saving bulk editor changes...');
+    try {
+        console.log('💾 Saving bulk editor changes...');
+        
+        // Set saving flag
+        isSavingBulkChanges = true;
+        
+        if (!currentBusiness?.id) {
+            throw new Error('No business selected');
+        }
+
+        // Get the save button
+        const saveButton = document.querySelector('#bulk-editor-modal button[onclick*="saveBulkEditorChanges"]');
+        const originalButtonHTML = saveButton ? saveButton.innerHTML : '';
+        
+        // Show loading state on button
+        if (saveButton) {
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            saveButton.disabled = true;
+        }
+        
+        // Show overall progress container
+        showBulkSaveProgress();
+
+        // Get current products from database to compare
+        const { data: existingProducts, error: fetchError } = await supabase
+            .from('products')
+            .select('id, name, sku')
+            .eq('business_id', currentBusiness.id)
+            .eq('is_active', true);
+
+        if (fetchError) throw fetchError;
+
+        // Identify what needs to be done
+        const productsInEditor = bulkEditorData.filter(p => !p._isNew);
+        const productsToUpdate = productsInEditor.filter(p => p._hasChanges);
+        const productsToCreate = bulkEditorData.filter(p => p._isNew && p.name.trim());
+        
+        // Find products that are in database but not in editor (deleted in UI)
+        const existingProductIds = existingProducts?.map(p => p.id) || [];
+        const editorProductIds = productsInEditor.map(p => p.id).filter(Boolean);
+        const productsToDeleteIds = existingProductIds.filter(id => !editorProductIds.includes(id));
+
+        console.log('📊 Changes to save:', {
+            create: productsToCreate.length,
+            update: productsToUpdate.length,
+            delete: productsToDeleteIds.length,
+            total: productsToCreate.length + productsToUpdate.length + productsToDeleteIds.length
+        });
+
+        // Update progress bar
+        updateBulkSaveProgress(5, 'Preparing data...');
+
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+        const totalOperations = productsToCreate.length + productsToUpdate.length + productsToDeleteIds.length;
+
+        // UPDATE existing products (batch processing for better performance)
+        if (productsToUpdate.length > 0) {
+            updateBulkSaveProgress(10, `Updating ${productsToUpdate.length} products...`);
             
-            if (!currentBusiness?.id) {
-                throw new Error('No business selected');
+            // Process updates in batches to avoid overwhelming the database
+            const batchSize = 50;
+            for (let i = 0; i < productsToUpdate.length; i += batchSize) {
+                const batch = productsToUpdate.slice(i, i + batchSize);
+                
+                // Calculate progress percentage
+                const progress = 10 + (i / productsToUpdate.length) * 40;
+                updateBulkSaveProgress(progress, `Updating batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(productsToUpdate.length/batchSize)}...`);
+                
+                for (const product of batch) {
+                    try {
+                        const updateData = {
+                            name: product.name.trim(),
+                            sku: product.sku.trim(),
+                            category: product.category,
+                            cost_price: product.cost_price,
+                            selling_price: product.selling_price,
+                            current_stock: product.current_stock,
+                            reorder_level: product.reorder_level,
+                            unit: product.unit,
+                            description: product.description.trim(),
+                            updated_at: new Date().toISOString()
+                        };
+
+                        const { error } = await supabase
+                            .from('products')
+                            .update(updateData)
+                            .eq('id', product.id)
+                            .eq('business_id', currentBusiness.id);
+
+                        if (error) throw error;
+                        successCount++;
+                        
+                    } catch (error) {
+                        console.error('❌ Update error for product:', product.name, error);
+                        errorCount++;
+                        errors.push(`Update failed for ${product.name}: ${error.message}`);
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
+        }
 
-            // Get current products from database to compare
-            const { data: existingProducts, error: fetchError } = await supabase
-                .from('products')
-                .select('id, name, sku')
-                .eq('business_id', currentBusiness.id)
-                .eq('is_active', true);
-
-            if (fetchError) throw fetchError;
-
-            // Identify what needs to be done
-            const productsInEditor = bulkEditorData.filter(p => !p._isNew);
-            const productsToUpdate = productsInEditor.filter(p => p._hasChanges);
-            const productsToCreate = bulkEditorData.filter(p => p._isNew && p.name.trim());
+        // CREATE new products (batch processing)
+        if (productsToCreate.length > 0) {
+            updateBulkSaveProgress(50, `Creating ${productsToCreate.length} new products...`);
             
-            // Find products that are in database but not in editor (deleted in UI)
-            const existingProductIds = existingProducts?.map(p => p.id) || [];
-            const editorProductIds = productsInEditor.map(p => p.id).filter(Boolean);
-            const productsToDeleteIds = existingProductIds.filter(id => !editorProductIds.includes(id));
+            // Prepare all new products data
+            const newProductsData = productsToCreate.map(product => {
+                if (!product.name.trim()) {
+                    throw new Error('Product name is required');
+                }
 
-            console.log('📊 Changes to save:', {
-                create: productsToCreate.length,
-                update: productsToUpdate.length,
-                delete: productsToDeleteIds.length
+                return {
+                    name: product.name.trim(),
+                    description: product.description.trim(),
+                    sku: product.sku.trim() || generateSKU(),
+                    category: product.category,
+                    cost_price: product.cost_price,
+                    selling_price: product.selling_price,
+                    current_stock: product.current_stock,
+                    reorder_level: product.reorder_level,
+                    unit: product.unit,
+                    business_id: currentBusiness.id,
+                    is_active: true,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
             });
 
-            let successCount = 0;
-            let errorCount = 0;
-            const errors = [];
-
-            // UPDATE existing products
-            for (const product of productsToUpdate) {
+            // Process creates in batches
+            const createBatchSize = 100;
+            for (let i = 0; i < newProductsData.length; i += createBatchSize) {
+                const batch = newProductsData.slice(i, i + createBatchSize);
+                
+                const progress = 50 + (i / newProductsData.length) * 30;
+                updateBulkSaveProgress(progress, `Creating batch ${Math.floor(i/createBatchSize) + 1} of ${Math.ceil(newProductsData.length/createBatchSize)}...`);
+                
                 try {
-                    const updateData = {
-                        name: product.name.trim(),
-                        sku: product.sku.trim(),
-                        category: product.category,
-                        cost_price: product.cost_price,
-                        selling_price: product.selling_price,
-                        current_stock: product.current_stock,
-                        reorder_level: product.reorder_level,
-                        unit: product.unit,
-                        description: product.description.trim(),
-                        updated_at: new Date().toISOString()
-                    };
-
-                    console.log('🔄 Updating product:', product.id, updateData);
-
                     const { error } = await supabase
                         .from('products')
-                        .update(updateData)
-                        .eq('id', product.id)
-                        .eq('business_id', currentBusiness.id);
+                        .insert(batch);
 
                     if (error) throw error;
-                    successCount++;
+                    successCount += batch.length;
                     
                 } catch (error) {
-                    console.error('❌ Update error for product:', product.name, error);
-                    errorCount++;
-                    errors.push(`Update failed for ${product.name}: ${error.message}`);
+                    console.error('❌ Batch create error:', error);
+                    errorCount += batch.length;
+                    errors.push(`Batch create failed: ${error.message}`);
                 }
+                
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
+        }
 
-            // CREATE new products
-            for (const product of productsToCreate) {
+        // DELETE products removed from editor
+        if (productsToDeleteIds.length > 0) {
+            updateBulkSaveProgress(80, `Deleting ${productsToDeleteIds.length} products...`);
+            
+            // Process deletes in batches
+            const deleteBatchSize = 100;
+            for (let i = 0; i < productsToDeleteIds.length; i += deleteBatchSize) {
+                const batch = productsToDeleteIds.slice(i, i + deleteBatchSize);
+                
+                const progress = 80 + (i / productsToDeleteIds.length) * 20;
+                updateBulkSaveProgress(progress, `Deleting batch ${Math.floor(i/deleteBatchSize) + 1} of ${Math.ceil(productsToDeleteIds.length/deleteBatchSize)}...`);
+                
                 try {
-                    if (!product.name.trim()) {
-                        throw new Error('Product name is required');
-                    }
-
-                    const productRecord = {
-                        name: product.name.trim(),
-                        description: product.description.trim(),
-                        sku: product.sku.trim() || generateSKU(),
-                        category: product.category,
-                        cost_price: product.cost_price,
-                        selling_price: product.selling_price,
-                        current_stock: product.current_stock,
-                        reorder_level: product.reorder_level,
-                        unit: product.unit,
-                        business_id: currentBusiness.id,
-                        is_active: true,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    };
-
-                    console.log('🆕 Creating product:', productRecord);
-
-                    const { error } = await supabase
-                        .from('products')
-                        .insert([productRecord]);
-
-                    if (error) throw error;
-                    successCount++;
-                    
-                } catch (error) {
-                    console.error('❌ Create error for product:', product.name, error);
-                    errorCount++;
-                    errors.push(`Create failed for ${product.name}: ${error.message}`);
-                }
-            }
-
-            // DELETE products removed from editor
-            for (const productId of productsToDeleteIds) {
-                try {
-                    console.log('🗑️ Deleting product:', productId);
-
                     const { error } = await supabase
                         .from('products')
                         .update({ 
                             is_active: false,
                             updated_at: new Date().toISOString()
                         })
-                        .eq('id', productId)
+                        .in('id', batch)
                         .eq('business_id', currentBusiness.id);
 
                     if (error) throw error;
-                    successCount++;
+                    successCount += batch.length;
                     
                 } catch (error) {
-                    console.error('❌ Delete error for product ID:', productId, error);
-                    errorCount++;
-                    const productName = existingProducts?.find(p => p.id === productId)?.name || 'Unknown';
-                    errors.push(`Delete failed for ${productName}: ${error.message}`);
+                    console.error('❌ Batch delete error:', error);
+                    errorCount += batch.length;
+                    errors.push(`Batch delete failed: ${error.message}`);
                 }
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
+        }
 
-            console.log(`✅ Save completed: ${successCount} successful, ${errorCount} failed`);
+        console.log(`✅ Save completed: ${successCount} successful, ${errorCount} failed`);
+        updateBulkSaveProgress(100, 'Operation completed!');
 
-            // Show appropriate notification
+        // Auto-close progress modal after 1 second
+        setTimeout(() => {
+            hideBulkSaveProgress();
+            
             if (successCount === 0 && errorCount === 0) {
                 showNotification('Info', 'No changes to save', 'info');
+                // Still navigate back even if no changes
+                navigateBackToInventory();
             } else if (errorCount > 0) {
                 const errorMessage = errors.length > 0 ? ` First error: ${errors[0]}` : '';
                 showNotification('Warning', `Saved ${successCount} changes, ${errorCount} failed.${errorMessage}`, 'warning');
+                
+                // Ask user if they want to go back to inventory
+                if (confirm(`Saved ${successCount} changes with ${errorCount} errors. Go back to inventory page?`)) {
+                    navigateBackToInventory();
+                }
             } else {
-                showNotification('Success', `Successfully saved ${successCount} changes`, 'success');
+                showNotification('Success', `Successfully saved ${successCount} changes!`, 'success');
+                
+                // Wait 1 second then auto-navigate back to inventory
+                setTimeout(() => {
+                    navigateBackToInventory();
+                }, 1000);
             }
 
-            // Only reload if we had successful changes
+            // Refresh data even if we stay on bulk editor
             if (successCount > 0) {
-                await loadProductsIntoBulkEditor();
+                loadProductsIntoBulkEditor();
                 loadInventoryProducts();
                 loadInventorySummary();
             }
             
-            hideBulkEditor();
+        }, 500);
 
-        } catch (error) {
-            console.error('❌ Error saving bulk changes:', error);
-            showNotification('Error', 'Failed to save changes: ' + error.message, 'error');
+    } catch (error) {
+        console.error('❌ Error saving bulk changes:', error);
+        hideBulkSaveProgress();
+        showNotification('Error', 'Failed to save changes: ' + error.message, 'error');
+    } finally {
+        // Reset saving flag
+        isSavingBulkChanges = false;
+        
+        // Restore save button
+        const saveButton = document.querySelector('#bulk-editor-modal button[onclick*="saveBulkEditorChanges"]');
+        if (saveButton) {
+            saveButton.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            saveButton.disabled = false;
         }
     }
+}
+
+// Show bulk save progress modal
+function showBulkSaveProgress() {
+    // Create or update progress modal
+    let progressModal = document.getElementById('bulk-save-progress');
+    
+    if (!progressModal) {
+        progressModal = document.createElement('div');
+        progressModal.id = 'bulk-save-progress';
+        progressModal.className = 'modal bulk-save-progress-modal';
+        progressModal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-spinner fa-spin"></i> Saving Bulk Changes</h3>
+                    <button class="close-btn" onclick="hideBulkSaveProgress()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="progress-container">
+                        <div class="progress-info">
+                            <div class="progress-text" id="bulk-progress-text">Preparing...</div>
+                            <div class="progress-percentage" id="bulk-progress-percentage">0%</div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="bulk-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-stats">
+                            <div class="stat-item">
+                                <i class="fas fa-check-circle success"></i>
+                                <span>Success: <strong id="bulk-success-count">0</strong></span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-exclamation-circle warning"></i>
+                                <span>Failed: <strong id="bulk-error-count">0</strong></span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-clock"></i>
+                                <span>Time: <strong id="bulk-time-elapsed">0s</strong></span>
+                            </div>
+                        </div>
+                        <div class="progress-details" id="bulk-progress-details">
+                            <!-- Operation details will appear here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline btn-sm" onclick="hideBulkSaveProgress()" disabled id="bulk-progress-close-btn">
+                        <i class="fas fa-times"></i> Cancel (Operation in Progress)
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(progressModal);
+    }
+    
+    // Reset progress
+    document.getElementById('bulk-progress-fill').style.width = '0%';
+    document.getElementById('bulk-progress-percentage').textContent = '0%';
+    document.getElementById('bulk-progress-text').textContent = 'Preparing...';
+    document.getElementById('bulk-success-count').textContent = '0';
+    document.getElementById('bulk-error-count').textContent = '0';
+    document.getElementById('bulk-time-elapsed').textContent = '0s';
+    document.getElementById('bulk-progress-details').innerHTML = '';
+    
+    // Show modal
+    progressModal.classList.remove('d-none');
+    
+    // Start timer
+    window.bulkSaveStartTime = Date.now();
+    updateBulkSaveTimer();
+    
+    // Disable modal close during operation
+    const closeBtn = document.getElementById('bulk-progress-close-btn');
+    if (closeBtn) {
+        closeBtn.disabled = true;
+        closeBtn.innerHTML = '<i class="fas fa-times"></i> Cancel (Operation in Progress)';
+    }
+}
+
+// Update bulk save progress
+function updateBulkSaveProgress(percentage, message = '') {
+    const progressFill = document.getElementById('bulk-progress-fill');
+    const progressPercentage = document.getElementById('bulk-progress-percentage');
+    const progressText = document.getElementById('bulk-progress-text');
+    
+    if (progressFill) {
+        progressFill.style.width = `${percentage}%`;
+    }
+    if (progressPercentage) {
+        progressPercentage.textContent = `${Math.round(percentage)}%`;
+    }
+    if (progressText && message) {
+        progressText.textContent = message;
+    }
+}
+
+// Update success/error counts
+function updateBulkSaveStats(success, error) {
+    const successCount = document.getElementById('bulk-success-count');
+    const errorCount = document.getElementById('bulk-error-count');
+    
+    if (successCount) successCount.textContent = success;
+    if (errorCount) errorCount.textContent = error;
+}
+
+// Update timer
+function updateBulkSaveTimer() {
+    if (!window.bulkSaveStartTime) return;
+    
+    const timerElement = document.getElementById('bulk-time-elapsed');
+    if (timerElement) {
+        const elapsedSeconds = Math.floor((Date.now() - window.bulkSaveStartTime) / 1000);
+        timerElement.textContent = `${elapsedSeconds}s`;
+    }
+    
+    // Update every second if modal is visible
+    if (document.getElementById('bulk-save-progress') && !document.getElementById('bulk-save-progress').classList.contains('d-none')) {
+        setTimeout(updateBulkSaveTimer, 1000);
+    }
+}
+
+// Hide bulk save progress
+function hideBulkSaveProgress() {
+    const progressModal = document.getElementById('bulk-save-progress');
+    if (progressModal) {
+        progressModal.classList.add('d-none');
+    }
+    
+    // Re-enable close button on bulk editor modal
+    const bulkModalClose = document.querySelector('#bulk-editor-modal .close-btn');
+    if (bulkModalClose) {
+        bulkModalClose.disabled = false;
+    }
+}
+
+// Add CSS for progress modal
+function addBulkSaveProgressStyles() {
+    if (!document.getElementById('bulk-save-progress-styles')) {
+        const style = document.createElement('style');
+        style.id = 'bulk-save-progress-styles';
+        style.textContent = `
+            .bulk-save-progress-modal .modal-content {
+                animation: slideUp 0.3s ease;
+            }
+            
+            .bulk-save-progress-modal .progress-container {
+                padding: 20px;
+            }
+            
+            .bulk-save-progress-modal .progress-info {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+            
+            .bulk-save-progress-modal .progress-text {
+                font-weight: 600;
+                color: #495057;
+            }
+            
+            .bulk-save-progress-modal .progress-percentage {
+                font-weight: 700;
+                color: #007bff;
+                font-size: 1.2rem;
+            }
+            
+            .bulk-save-progress-modal .progress-bar {
+                height: 12px;
+                background: #e9ecef;
+                border-radius: 6px;
+                overflow: hidden;
+                margin-bottom: 20px;
+            }
+            
+            .bulk-save-progress-modal .progress-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #007bff, #0056b3);
+                border-radius: 6px;
+                transition: width 0.3s ease;
+            }
+            
+            .bulk-save-progress-modal .progress-stats {
+                display: flex;
+                justify-content: space-around;
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+            
+            .bulk-save-progress-modal .stat-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .bulk-save-progress-modal .stat-item i.success {
+                color: #28a745;
+            }
+            
+            .bulk-save-progress-modal .stat-item i.warning {
+                color: #ffc107;
+            }
+            
+            .bulk-save-progress-modal .stat-item i {
+                font-size: 1.2rem;
+            }
+            
+            .bulk-save-progress-modal .stat-item span {
+                font-size: 0.9rem;
+                color: #6c757d;
+            }
+            
+            .bulk-save-progress-modal .stat-item strong {
+                color: #343a40;
+                font-size: 1.1rem;
+            }
+            
+            .bulk-save-progress-modal .progress-details {
+                max-height: 200px;
+                overflow-y: auto;
+                padding: 10px;
+                background: #f8f9fa;
+                border-radius: 6px;
+                font-size: 0.85rem;
+                color: #495057;
+            }
+            
+            .bulk-save-progress-modal .progress-details ul {
+                margin: 0;
+                padding-left: 20px;
+            }
+            
+            .bulk-save-progress-modal .progress-details li {
+                margin-bottom: 5px;
+            }
+            
+            .bulk-save-progress-modal .progress-details li.error {
+                color: #dc3545;
+            }
+            
+            .bulk-save-progress-modal .progress-details li.success {
+                color: #28a745;
+            }
+            
+            @keyframes slideUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(50px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
 
     // Import CSV into bulk editor
     async function importFromCSVToBulkEditor() {
@@ -1996,13 +2698,49 @@
         }
     }
 
-    function hideBulkEditor() {
-        const modal = document.getElementById('bulk-editor-modal');
-        if (modal) {
-            modal.classList.add('d-none');
-            isBulkEditorOpen = false;
+    // Override the returnToInventoryWithCheck function to use the new modal
+function returnToInventoryWithCheck() {
+    if (hasUnsavedBulkChanges() && !isSavingBulkChanges) {
+        showUnsavedChangesConfirmation().then((shouldLeave) => {
+            if (shouldLeave) {
+                proceedToInventory();
+            }
+        });
+    } else {
+        proceedToInventory();
+    }
+}
+
+// Update hideBulkEditor to check for unsaved changes
+function hideBulkEditor() {
+    if (hasUnsavedBulkChanges() && !isSavingBulkChanges) {
+        showUnsavedChangesConfirmation().then((shouldLeave) => {
+            if (shouldLeave) {
+                closeBulkEditor();
+            }
+        });
+    } else {
+        closeBulkEditor();
+    }
+}
+
+function closeBulkEditor() {
+    const modal = document.getElementById('bulk-editor-modal');
+    if (modal) {
+        modal.classList.add('d-none');
+        isBulkEditorOpen = false;
+        
+        // Clear bulk editor data to free memory
+        bulkEditorData = [];
+        
+        // Clear any unsaved changes
+        const unsavedChangesElement = document.getElementById('unsaved-changes-count');
+        if (unsavedChangesElement) {
+            unsavedChangesElement.textContent = 'No unsaved changes';
+            unsavedChangesElement.className = 'changes-count';
         }
     }
+}
 
     function setupBulkEditorEventListeners() {
         // Add keyboard shortcuts
@@ -2397,29 +3135,30 @@
     }
 
     async function deleteProduct(productId) {
-        if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-            try {
-                const { error } = await supabase
-                    .from('products')
-                    .update({ 
-                        is_active: false,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', productId)
-                    .eq('business_id', currentBusiness.id);
-                
-                if (error) throw error;
-                
-                showNotification('Success', 'Product deleted successfully', 'success');
-                loadInventoryProducts();
-                loadInventorySummary();
-                
-            } catch (error) {
-                console.error('❌ Delete product error:', error);
-                showNotification('Error', 'Failed to delete product', 'error');
-            }
+    // Confirm first
+    if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({ 
+                    is_active: false,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', productId)
+                .eq('business_id', currentBusiness.id);
+            
+            if (error) throw error;
+            
+            showNotification('Success', 'Product deleted successfully', 'success');
+            loadInventoryProducts();
+            loadInventorySummary();
+            
+        } catch (error) {
+            console.error('❌ Delete product error:', error);
+            showNotification('Error', 'Failed to delete product', 'error');
         }
     }
+}
 
     // Generate unique SKU
     function generateSKU() {
@@ -3063,70 +3802,77 @@
 
     // Update filtered products table
     function updateFilteredProductsTable() {
-        const container = document.getElementById('filtered-table-body');
-        
-        if (filteredProducts.length === 0) {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="11" class="text-center" style="padding: 3rem;">
-                        <div style="color: #6c757d;">
-                            <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                            <h4>No products found</h4>
-                            <p>No ${currentFilterType.replace('_', ' ')} products found in your inventory.</p>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        let totalStockValue = 0;
-        
-        container.innerHTML = filteredProducts.map((product, index) => {
-            const stockValue = (product.current_stock || 0) * (product.cost_price || 0);
-            totalStockValue += stockValue;
-            
-            const status = getStockStatusText(product.current_stock, product.reorder_level);
-            const statusClass = status === 'Out of Stock' ? 'status-critical' : 
-                            status === 'Low Stock' ? 'status-warning' : 'status-healthy';
-            
-            return `
-                <tr>
-                    <td>
-                        <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">${product.description || 'No description'}</div>
-                    </td>
-                    <td>${product.sku || '-'}</td>
-                    <td>
-                        <span class="font-weight-bold" style="color: ${getStockColor(product.current_stock, product.reorder_level)}">
-                            ${product.current_stock} ${product.unit || 'pcs'}
-                        </span>
-                    </td>
-                    <td>${product.reorder_level || 0}</td>
-                    <td>
-                        <span class="status-badge ${statusClass}">${status}</span>
-                    </td>
-                    <td>${formatCurrency(product.cost_price || 0)}</td>
-                    <td>${formatCurrency(product.selling_price || 0)}</td>
-                    <td>${formatCurrency(stockValue)}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-outline btn-sm" onclick="adjustStock('${product.id}')" title="Adjust Stock">
-                                <i class="fas fa-exchange-alt"></i>
-                            </button>
-                            <button class="btn btn-outline btn-sm" onclick="showProductDetails('${product.id}')" title="View Details">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        
-        // Update totals
-        document.getElementById('filtered-total-count').textContent = filteredProducts.length;
-        document.getElementById('filtered-total-value').textContent = formatCurrency(totalStockValue);
+    const container = document.getElementById('filtered-table-body');
+    
+    if (filteredProducts.length === 0) {
+        container.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center" style="padding: 3rem;">
+                    <div style="color: #6c757d;">
+                        <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <h4>No products found</h4>
+                        <p>No ${currentFilterType.replace('_', ' ')} products found in your inventory.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
     }
+    
+    let totalStockValue = 0;
+    
+    container.innerHTML = filteredProducts.map((product, index) => {
+        const stockValue = (product.current_stock || 0) * (product.cost_price || 0);
+        totalStockValue += stockValue;
+        
+        const status = getStockStatusText(product.current_stock, product.reorder_level);
+        const statusClass = status === 'Out of Stock' ? 'status-critical' : 
+                        status === 'Low Stock' ? 'status-warning' : 'status-healthy';
+        
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
+                    <div style="font-size: 0.8rem; color: #6c757d;">${product.description || 'No description'}</div>
+                </td>
+                <td>${product.sku || '-'}</td>
+                <td>
+                    <span class="font-weight-bold" style="color: ${getStockColor(product.current_stock, product.reorder_level)}">
+                        ${product.current_stock} ${product.unit || 'pcs'}
+                    </span>
+                </td>
+                <td>${product.reorder_level || 0}</td>
+                <td>
+                    <span class="status-badge ${statusClass}">${status}</span>
+                </td>
+                <td>${formatCurrency(product.cost_price || 0)}</td>
+                <td>${formatCurrency(product.selling_price || 0)}</td>
+                <td>${formatCurrency(stockValue)}</td>
+                <td>
+                    <div class="action-dropdown">
+                        <button class="action-dots" onclick="event.stopPropagation(); toggleActionDropdown('filtered-${product.id}')">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="action-dropdown-menu" id="action-dropdown-filtered-${product.id}">
+                            ${hasPermission('inventory', 'adjust') ? `
+                                <button class="action-dropdown-item" onclick="adjustStock('${product.id}')">
+                                    <i class="fas fa-exchange-alt"></i> Adjust Stock
+                                </button>
+                            ` : ''}
+                            <button class="action-dropdown-item" onclick="showProductDetails('${product.id}')">
+                                <i class="fas fa-eye"></i> View Details
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Update totals
+    document.getElementById('filtered-total-count').textContent = filteredProducts.length;
+    document.getElementById('filtered-total-value').textContent = formatCurrency(totalStockValue);
+}
 
     // Update filter statistics
     function updateFilterStats() {
@@ -3922,71 +4668,78 @@
 
     // Update filtered table with search results
     function updateFilteredTableWithSearch(filteredResults) {
-        const container = document.getElementById('filtered-table-body');
-        
-        if (filteredResults.length === 0) {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="11" class="text-center" style="padding: 2rem;">
-                        <div style="color: #6c757d;">
-                            <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                            <p>No products found matching your search</p>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        let totalStockValue = 0;
-        
-        container.innerHTML = filteredResults.map((product, index) => {
-            const stockValue = (product.current_stock || 0) * (product.cost_price || 0);
-            totalStockValue += stockValue;
-            
-            const status = getStockStatusText(product.current_stock, product.reorder_level);
-            const statusClass = status === 'Out of Stock' ? 'status-critical' : 
-                            status === 'Low Stock' ? 'status-warning' : 'status-healthy';
-            
-            return `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td>
-                        <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">${product.description || 'No description'}</div>
-                    </td>
-                    <td>${product.sku || '-'}</td>
-                    <td>${product.category || 'Uncategorized'}</td>
-                    <td>
-                        <span class="font-weight-bold" style="color: ${getStockColor(product.current_stock, product.reorder_level)}">
-                            ${product.current_stock} ${product.unit || 'pcs'}
-                        </span>
-                    </td>
-                    <td>${product.reorder_level || 0}</td>
-                    <td>
-                        <span class="status-badge ${statusClass}">${status}</span>
-                    </td>
-                    <td>${formatCurrency(product.cost_price || 0)}</td>
-                    <td>${formatCurrency(product.selling_price || 0)}</td>
-                    <td>${formatCurrency(stockValue)}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-outline btn-sm" onclick="adjustStock('${product.id}')" title="Adjust Stock">
-                                <i class="fas fa-exchange-alt"></i>
-                            </button>
-                            <button class="btn btn-outline btn-sm" onclick="showProductDetails('${product.id}')" title="View Details">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        
-        // Update search results count
-        document.getElementById('filtered-total-count').textContent = `${filteredResults.length} of ${filteredProducts.length}`;
-        document.getElementById('filtered-total-value').textContent = formatCurrency(totalStockValue);
+    const container = document.getElementById('filtered-table-body');
+    
+    if (filteredResults.length === 0) {
+        container.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center" style="padding: 2rem;">
+                    <div style="color: #6c757d;">
+                        <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <p>No products found matching your search</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
     }
+    
+    let totalStockValue = 0;
+    
+    container.innerHTML = filteredResults.map((product, index) => {
+        const stockValue = (product.current_stock || 0) * (product.cost_price || 0);
+        totalStockValue += stockValue;
+        
+        const status = getStockStatusText(product.current_stock, product.reorder_level);
+        const statusClass = status === 'Out of Stock' ? 'status-critical' : 
+                        status === 'Low Stock' ? 'status-warning' : 'status-healthy';
+        
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>
+                    <div style="font-weight: 600;">${escapeHtml(product.name)}</div>
+                    <div style="font-size: 0.8rem; color: #6c757d;">${product.description || 'No description'}</div>
+                </td>
+                <td>${product.sku || '-'}</td>
+                <td>${product.category || 'Uncategorized'}</td>
+                <td>
+                    <span class="font-weight-bold" style="color: ${getStockColor(product.current_stock, product.reorder_level)}">
+                        ${product.current_stock} ${product.unit || 'pcs'}
+                    </span>
+                </td>
+                <td>${product.reorder_level || 0}</td>
+                <td>
+                    <span class="status-badge ${statusClass}">${status}</span>
+                </td>
+                <td>${formatCurrency(product.cost_price || 0)}</td>
+                <td>${formatCurrency(product.selling_price || 0)}</td>
+                <td>${formatCurrency(stockValue)}</td>
+                <td>
+                    <div class="action-dropdown">
+                        <button class="action-dots" onclick="event.stopPropagation(); toggleActionDropdown('search-${product.id}')">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="action-dropdown-menu" id="action-dropdown-search-${product.id}">
+                            ${hasPermission('inventory', 'adjust') ? `
+                                <button class="action-dropdown-item" onclick="adjustStock('${product.id}')">
+                                    <i class="fas fa-exchange-alt"></i> Adjust Stock
+                                </button>
+                            ` : ''}
+                            <button class="action-dropdown-item" onclick="showProductDetails('${product.id}')">
+                                <i class="fas fa-eye"></i> View Details
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Update search results count
+    document.getElementById('filtered-total-count').textContent = `${filteredResults.length} of ${filteredProducts.length}`;
+    document.getElementById('filtered-total-value').textContent = formatCurrency(totalStockValue);
+}
 
     // Helper function to hide all pages
     function hideAllPages() {
@@ -4070,51 +4823,52 @@
     // Inventory-specific keyboard shortcuts
 function setupInventoryShortcuts() {
     document.addEventListener('keydown', function(e) {
-        // Only trigger if we're on inventory page and not in an input
+        // Only trigger if we're on inventory page
         const onInventoryPage = document.getElementById('inventory-page') && 
                                !document.getElementById('inventory-page').classList.contains('d-none');
         
         if (!onInventoryPage || 
-            e.target.tagName === 'INPUT' || 
+            (e.target.tagName === 'INPUT' && !e.altKey) || 
             e.target.tagName === 'TEXTAREA' ||
             e.target.tagName === 'SELECT') {
             return;
         }
         
-        // Ctrl/Cmd + N - Add new product
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        // Alt + I - Already handled globally, but confirm
+        if (e.altKey && e.key.toLowerCase() === 'i') {
             e.preventDefault();
             showAddProductModal();
-            showNotification('Info', 'Opening new product form...', 'info', 1500);
+            keyboardShortcuts?.showShortcutFeedback('Creating new product');
         }
         
-        // Ctrl/Cmd + F - Focus search
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        // Alt + F - Focus search (also global)
+        if (e.altKey && e.key.toLowerCase() === 'f') {
             e.preventDefault();
             const searchInput = document.getElementById('inventory-search');
             if (searchInput) {
                 searchInput.focus();
                 searchInput.select();
-                showNotification('Info', 'Search focused. Type to filter products.', 'info', 1500);
+                keyboardShortcuts?.showShortcutFeedback('Search focused');
             }
         }
         
-        // Ctrl/Cmd + E - Bulk editor
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+        // Alt + E - Bulk editor
+        if (e.altKey && e.key.toLowerCase() === 'e') {
             e.preventDefault();
             showBulkEditor();
-            showNotification('Info', 'Opening bulk editor...', 'info', 1500);
+            keyboardShortcuts?.showShortcutFeedback('Opening bulk editor');
         }
         
-        // Ctrl/Cmd + X - Export
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        // Alt + X - Export
+        if (e.altKey && e.key.toLowerCase() === 'x') {
             e.preventDefault();
             exportData('inventory');
+            keyboardShortcuts?.showShortcutFeedback('Exporting inventory');
         }
         
-        // Enter - View selected product (if any row is highlighted)
+        // Enter - View selected product
         if (e.key === 'Enter') {
-            const selectedRow = document.querySelector('.clickable-row:hover');
+            const selectedRow = document.querySelector('.clickable-row:hover, .clickable-row:focus-within');
             if (selectedRow) {
                 e.preventDefault();
                 const productId = selectedRow.getAttribute('onclick')?.match(/showProductDetails\('([^']+)'\)/)?.[1];
@@ -4126,13 +4880,19 @@ function setupInventoryShortcuts() {
         
         // Delete - Delete selected product
         if (e.key === 'Delete') {
-            const selectedRow = document.querySelector('.clickable-row:hover');
+            const selectedRow = document.querySelector('.clickable-row:hover, .clickable-row:focus-within');
             if (selectedRow && confirm('Delete this product?')) {
                 const deleteBtn = selectedRow.querySelector('.btn-danger');
                 if (deleteBtn) {
                     deleteBtn.click();
                 }
             }
+        }
+        
+        // Tab navigation enhancement
+        if (e.key === 'Tab' && !e.altKey) {
+            // Let browser handle normal tab navigation
+            return;
         }
     });
 }

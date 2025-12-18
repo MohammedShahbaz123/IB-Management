@@ -1,6 +1,6 @@
 /* Sales Management Styles */
 .page-content {
-    padding: 20px;
+   
     background: #f5f7fa;
     min-height: 100vh;
 }
@@ -99,7 +99,6 @@
 
 .card-header {
     padding: 20px;
-    border-bottom: 1px solid #eee;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -225,6 +224,10 @@
 
 .quick-add-btn:hover {
     background: #d4e7ff;
+}
+
+.btn-group{
+    padding-bottom: 10px    ;
 }
 
 /* Add Items Section */
@@ -523,6 +526,365 @@
 
 .text-center{
     font-size: 20px;
+}
+
+/* Sales Search Styles */
+.search-container {
+    position: relative;
+}
+
+.sales-search-focus:focus-within .input-group{
+    border-color: #4361ee;
+}
+
+.search-container .input-group {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Add this for the focus effect you requested */
+.search-container .input-group:focus-within {
+    outline: none;
+    border-color: #4361ee;
+    box-shadow: 0 0 0 2px #4361ee;
+}
+
+.input-group i{
+    padding-inline: 10px;
+}
+
+.search-container .input-group-text {
+    background: transparent;
+    color: #6c757d;
+    padding: 0.375rem 0.75rem;
+    transition: color 0.2s ease;
+}
+
+/* Change icon color when focused */
+.search-container .input-group:focus-within .input-group-text {
+    color: #4361ee;
+}
+
+.search-container .form-control {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+}
+
+/* Remove default focus outline from input itself */
+.search-container .form-control:focus {
+    outline: none;
+    box-shadow: none !important;
+}
+
+#clear-search-btn {
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    padding: 0.375rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0;
+    transform: scale(0.9);
+    display: flex !important; /* Always show but hide with opacity */
+    align-items: center;
+    justify-content: center;
+}
+
+#sales-search-input:not(:placeholder-shown) ~ #clear-search-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Search Results Highlight */
+.search-highlight {
+    background-color: #e6f7ff !important;
+    color: #0066cc !important;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+/* Keyboard shortcut indicator for search */
+.search-shortcut {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #4361ee;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 2px 4px rgba(64, 158, 255, 0.2);
+}
+
+
+
+/* Add focus state for the entire search container */
+.search-container.focused .input-group {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+/* Add animation for focus effect */
+@keyframes focusPulse {
+    0% {
+        box-shadow: 0 0 0 0 #4361ee;
+    }
+    100% {
+        box-shadow: 0 0 0 2px #4361ee;
+    }
+}
+
+.search-container .input-group:focus-within {
+    animation: focusPulse 0.3s ease-out;
+}
+
+/* Optional: Add a subtle background change on focus */
+.search-container .input-group:focus-within {
+    background-color: rgba(64, 158, 255, 0.02);
+}
+
+/* Placeholder styling */
+.search-container .form-control::placeholder {
+    color: #adb5bd;
+    transition: color 0.2s ease;
+}
+
+.search-container .input-group:focus-within .form-control::placeholder {
+    color: #6c757d;
+}
+
+/* For the icon inside the input group */
+.input-group i {
+    padding-inline: 10px;
+    color: #6c757d;
+    transition: color 0.2s ease;
+}
+
+.search-container .input-group:focus-within i {
+    color: #4361ee;
+}
+
+/* Report Styles */
+.quick-date-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.quick-date-buttons .btn {
+    flex: 1;
+    min-width: 120px;
+    margin-bottom: 5px;
+}
+
+.report-summary-cards {
+    margin-bottom: 30px;
+}
+
+.report-summary-cards .stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.report-summary-cards .stat-icon {
+    font-size: 2rem;
+    opacity: 0.8;
+}
+
+.report-summary-cards .stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin-bottom: 5px;
+}
+
+.report-summary-cards .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.report-date-range .alert {
+    border: none;
+    background-color: #e8f4ff;
+    color: #0d6efd;
+}
+
+#sales-report-results .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+#sales-report-results .header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .report-summary-cards .stat-card {
+        break-inside: avoid;
+    }
+    
+    table {
+        font-size: 12px;
+    }
+}
+
+/* Inline editing styles */
+.item-quantity-input, .item-price-input {
+    border: 1px solid #ced4da;
+    padding: 4px 8px;
+    text-align: right;
+}
+
+.item-quantity-input:focus, .item-price-input:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    outline: none;
+}
+
+.item-name-cell {
+    min-width: 200px;
+}
+
+.item-quantity-cell, .item-price-cell {
+    min-width: 100px;
+}
+
+.item-subtotal-cell {
+    min-width: 120px;
+    font-weight: 500;
+}
+
+.update-item-btn {
+    transition: all 0.3s ease;
+}
+
+/* Edit mode indicator */
+.invoice-header .badge.bg-warning {
+    font-size: 0.7rem;
+    vertical-align: middle;
+    margin-left: 10px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .item-quantity-input, .item-price-input {
+        width: 60px !important;
+        padding: 2px 4px;
+        font-size: 12px;
+    }
+    
+    .remove-item-btn, .update-item-btn {
+        padding: 2px 6px;
+        font-size: 12px;
+    }
+}
+
+/* Leave Confirmation Modal Styles */
+#leave-invoice-modal .modal-dialog {
+    max-width: 500px;
+}
+
+#leave-invoice-modal .modal-content {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+#leave-invoice-modal .modal-header {
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 20px 25px;
+}
+
+#leave-invoice-modal .modal-title {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+#leave-invoice-modal .modal-body {
+    padding: 30px 25px;
+}
+
+#leave-invoice-modal .fa-exclamation-triangle {
+    color: #ff9800;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+#leave-invoice-modal .alert-warning {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 0;
+}
+
+#leave-invoice-modal .modal-footer {
+    padding: 20px 25px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}   
+
+/* Make modal responsive */
+@media (max-width: 576px) {
+    #leave-invoice-modal .modal-dialog {
+        margin: 10px;
+    }
+    
+    #leave-invoice-modal .modal-body {
+        padding: 20px 15px;
+    }
+    
+    #leave-invoice-modal .modal-footer {
+        padding: 15px;
+        flex-direction: column;
+    }
+    
+    #leave-invoice-modal .modal-footer .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
 }
 
 

@@ -1,42 +1,40 @@
 // Sales-specific keyboard shortcuts
 function setupSalesShortcuts() {
     document.addEventListener('keydown', function(e) {
-        // Only trigger if we're on sales page and not in an input
+        // Only trigger if we're on sales page
         const onSalesPage = document.getElementById('sales-page') && 
                            !document.getElementById('sales-page').classList.contains('d-none');
         
         if (!onSalesPage || 
-            e.target.tagName === 'INPUT' || 
+            (e.target.tagName === 'INPUT' && !e.altKey) || 
             e.target.tagName === 'TEXTAREA' ||
             e.target.tagName === 'SELECT') {
             return;
         }
         
-        // Ctrl/Cmd + Shift + N - New sale invoice
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {
+        // Alt + S - Already handled globally, but confirm
+        if (e.altKey && e.key.toLowerCase() === 's') {
             e.preventDefault();
             if (salesManagement) {
                 salesManagement.showCreateInvoice();
-                showNotification('Info', 'Creating new sale invoice...', 'info', 1500);
+                keyboardShortcuts?.showShortcutFeedback('Creating new sale');
             }
         }
         
-        // Ctrl/Cmd + R - Refresh sales
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+        // Alt + R - Refresh sales
+        if (e.altKey && e.key.toLowerCase() === 'r') {
             e.preventDefault();
             if (salesManagement) {
                 salesManagement.loadSalesData();
-                showNotification('Info', 'Refreshing sales data...', 'info', 1500);
+                keyboardShortcuts?.showShortcutFeedback('Refreshing sales');
             }
         }
         
-        // Ctrl/Cmd + P - Print selected invoice
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        // Alt + P - Print selected invoice
+        if (e.altKey && e.key.toLowerCase() === 'p') {
             e.preventDefault();
             const selectedCheckbox = document.querySelector('.sale-checkbox:checked');
             if (selectedCheckbox) {
-                const saleId = selectedCheckbox.value;
-                // Find and trigger print for this sale
                 const printBtn = selectedCheckbox.closest('tr').querySelector('[onclick*="print"]');
                 if (printBtn) {
                     printBtn.click();
@@ -44,13 +42,11 @@ function setupSalesShortcuts() {
             }
         }
         
-        // Ctrl/Cmd + E - Email selected invoice
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+        // Alt + E - Email selected invoice
+        if (e.altKey && e.key.toLowerCase() === 'e') {
             e.preventDefault();
             const selectedCheckbox = document.querySelector('.sale-checkbox:checked');
             if (selectedCheckbox) {
-                const saleId = selectedCheckbox.value;
-                // Find and trigger email for this sale
                 const emailBtn = selectedCheckbox.closest('tr').querySelector('[onclick*="email"]');
                 if (emailBtn) {
                     emailBtn.click();
@@ -59,7 +55,7 @@ function setupSalesShortcuts() {
         }
         
         // Space - Select/deselect hovered row
-        if (e.key === ' ') {
+        if (e.key === ' ' && !e.altKey) {
             e.preventDefault();
             const hoveredRow = e.target.closest('.sale-row');
             if (hoveredRow) {
@@ -68,16 +64,6 @@ function setupSalesShortcuts() {
                     checkbox.checked = !checkbox.checked;
                     checkbox.dispatchEvent(new Event('change'));
                 }
-            }
-        }
-        
-        // A - Select all (when not in input)
-        if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            const selectAll = document.getElementById('select-all-sales');
-            if (selectAll) {
-                selectAll.checked = !selectAll.checked;
-                selectAll.dispatchEvent(new Event('change'));
             }
         }
     });
@@ -96,6 +82,14 @@ class SalesManagement {
         this.isLoading = false;
         this.previewInvoiceData = null;
         this.previewInvoiceNumber = '';
+        this.searchTerm = '';
+        this.filteredSalesData = [];
+        this.isSearchActive = false;
+        this.reportData = [];
+        this.currentReportFilters = {};
+        this.isReportView = false;
+        this.hasUnsavedChanges = false;
+        this.isConfirmingLeave = false;
         
         this.init();
     }
@@ -108,12 +102,337 @@ class SalesManagement {
         this.updateStats();
         this.addInvoicePreviewStyles();
         setupSalesShortcuts(); 
+        this.setupInvoiceKeyboardNavigation();
+        this.setupSearch();
+        this.setupBrowserBackButton(); 
+    setTimeout(() => this.setupChangeTracking(), 500);
+    }
+
+    setupChangeTracking() {
+    // Track form changes
+    const formInputs = document.querySelectorAll('#sales-invoice-page input, #sales-invoice-page select, #sales-invoice-page textarea');
+    
+    formInputs.forEach(input => {
+        input.addEventListener('input', () => {
+            this.hasUnsavedChanges = true;
+        });
+        
+        input.addEventListener('change', () => {
+            this.hasUnsavedChanges = true;
+        });
+    });
+    
+    // Track item additions/removals
+    const originalRenderInvoiceItems = this.renderInvoiceItems.bind(this);
+    this.renderInvoiceItems = () => {
+        originalRenderInvoiceItems();
+        this.hasUnsavedChanges = true;
+    };
+}
+
+checkForUnsavedChanges() {
+    // Check if we're in create/edit mode
+    const isOnInvoicePage = document.getElementById('sales-invoice-page') && 
+                           !document.getElementById('sales-invoice-page').classList.contains('d-none');
+    
+    if (!isOnInvoicePage) return true;
+    
+    // Check if there are unsaved changes
+    if (this.hasUnsavedChanges && !this.isConfirmingLeave) {
+        this.showLeaveConfirmation();
+        return false; // Don't proceed with navigation
+    }
+    
+    return true; // Proceed with navigation
+}
+
+showLeaveConfirmation() {
+    this.isConfirmingLeave = true;
+    this.showModal('leave-invoice-modal');
+}
+
+hideLeaveConfirmation() {
+    this.isConfirmingLeave = false;
+    document.getElementById('leave-invoice-modal').classList.add('d-none');
+}
+
+confirmLeave() {
+    this.hideLeaveConfirmation();
+    this.clearAllInvoiceData();
+    this.resetChangeTracking();
+    
+    // Force reset button to "Save Invoice"
+    const saveBtn = document.getElementById('save-invoice-btn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Invoice';
+        saveBtn.onclick = () => this.saveInvoice();
+    }
+    
+    this.showSalesList();
+}
+
+// Clear all invoice data completely
+clearAllInvoiceData() {
+    // Clear invoice items array
+    this.invoiceItems = [];
+    
+    // Reset form fields
+    document.getElementById('invoice-number').value = '';
+    document.getElementById('customer-select').value = '';
+    document.getElementById('invoice-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('invoice-notes').value = '';
+    
+    // Reset product form
+    document.getElementById('item-select').value = '';
+    document.getElementById('item-quantity').value = '1';
+    document.getElementById('item-price').value = '0.00';
+    document.getElementById('item-subtotal').value = '0.00';
+    document.getElementById('stock-info').style.display = 'none';
+    
+    // Clear items table
+    const tableBody = document.getElementById('invoice-items-body');
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="6" class="text-center py-5">
+                <div class="text-muted">
+                    <i class="fas fa-box-open fa-2x mb-3"></i>
+                    <p>No items added to invoice</p>
+                    <small>Add products to create your invoice</small>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Reset grand total
+    document.getElementById('grand-total-amount').textContent = '₹0.00';
+    
+    // Reset edit mode if active
+    if (this.editingSaleId) {
+        this.resetEditMode();
+    }
+    
+    // Force reset button to "Save Invoice"
+    const saveBtn = document.getElementById('save-invoice-btn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Invoice';
+        saveBtn.onclick = () => this.saveInvoice();
+    }
+    
+    // Refresh product list
+    this.loadProducts().then(() => {
+        this.populateProductDatalist();
+    });
+}
+
+resetChangeTracking() {
+    this.hasUnsavedChanges = false;
+    this.isConfirmingLeave = false;
+}
+
+    setupSearch() {
+        const searchInput = document.getElementById('sales-search-input');
+        const clearBtn = document.getElementById('clear-search-btn');
+        
+        if (searchInput) {
+            // Add keyboard shortcut indicator
+            searchInput.setAttribute('title', 'Search invoices (Alt+F)');
+            
+            // Add search event listener
+            searchInput.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value.trim().toLowerCase();
+                this.applySearch();
+                
+                // Show/hide clear button
+                if (clearBtn) {
+                    clearBtn.style.display = this.searchTerm ? 'block' : 'none';
+                }
+            });
+            
+            // Add keyboard shortcuts for search
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.clearSearch();
+                }
+                
+                if (e.key === 'Enter' && this.isSearchActive) {
+                    // Navigate to first result or show all results
+                    this.highlightFirstResult();
+                }
+            });
+            
+            // Add global keyboard shortcut for focusing search
+            document.addEventListener('keydown', (e) => {
+                if (e.altKey && e.key.toLowerCase() === 'f') {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.select();
+                }
+            });
+        }
+        
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearSearch();
+            });
+        }
+    }
+    
+    applySearch() {
+        if (!this.searchTerm) {
+            this.isSearchActive = false;
+            this.filteredSalesData = [...this.salesData];
+            this.renderSalesTable();
+            this.updateSearchResultsCount();
+            return;
+        }
+        
+        this.isSearchActive = true;
+        
+        // Filter sales based on search term
+        this.filteredSalesData = this.salesData.filter(sale => {
+            // Search in multiple fields
+            return (
+                (sale.invoiceNo && sale.invoiceNo.toLowerCase().includes(this.searchTerm)) ||
+                (sale.customer && sale.customer.toLowerCase().includes(this.searchTerm)) ||
+                (sale.customerEmail && sale.customerEmail.toLowerCase().includes(this.searchTerm)) ||
+                (sale.customerPhone && sale.customerPhone.includes(this.searchTerm)) ||
+                (sale.displayDate && sale.displayDate.toLowerCase().includes(this.searchTerm)) ||
+                (sale.status && sale.status.toLowerCase().includes(this.searchTerm)) ||
+                (sale.payment && sale.payment.toLowerCase().includes(this.searchTerm)) ||
+                (sale.amount && sale.amount.toString().includes(this.searchTerm))
+            );
+        });
+        
+        this.renderSalesTable(true); // Pass true to indicate search mode
+        this.updateSearchResultsCount();
+        this.highlightSearchTerms();
+    }
+
+    setupInvoiceKeyboardNavigation() {
+        // Define form fields in order
+        this.formFields = [
+            'item-select',      // 0 - Product field
+            'item-quantity',    // 1 - Quantity field
+            'item-price',       // 2 - Price field
+            'add-item-btn'      // 3 - Add button
+        ];
+        
+        // Add event listeners for Enter key navigation
+        document.getElementById('item-select')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.focusNextField();
+            }
+        });
+        
+        document.getElementById('item-quantity')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.focusNextField();
+            }
+        });
+        
+        document.getElementById('item-price')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.focusNextField();
+            }
+        });
+        
+        // Also allow Escape to go to previous field
+        document.getElementById('item-quantity')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.focusPreviousField();
+            }
+        });
+        
+        document.getElementById('item-price')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.focusPreviousField();
+            }
+        });
+        
+        // When Add Item button is focused, pressing Enter should click it
+        const addBtn = document.getElementById('add-item-btn');
+        if (addBtn) {
+            addBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addBtn.click();
+                }
+            });
+        }
+        
+        // Also set up for customer selection
+        document.getElementById('customer-select')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('item-select')?.focus();
+            }
+        });
+    }
+
+    focusNextField() {
+        this.currentFocusIndex++;
+        
+        if (this.currentFocusIndex >= this.formFields.length) {
+            // Loop back to first field
+            this.currentFocusIndex = 0;
+        }
+        
+        const nextFieldId = this.formFields[this.currentFocusIndex];
+        const nextField = document.getElementById(nextFieldId);
+        
+        if (nextField) {
+            nextField.focus();
+            
+            // If it's the add button, just focus it (Enter will trigger click)
+            if (nextFieldId === 'add-item-btn') {
+                nextField.focus();
+            } else if (nextField.tagName === 'INPUT') {
+                nextField.select(); // Select text for easy editing
+            }
+        }
+    }
+    
+    focusPreviousField() {
+        this.currentFocusIndex--;
+        
+        if (this.currentFocusIndex < 0) {
+            // Loop to last field
+            this.currentFocusIndex = this.formFields.length - 1;
+        }
+        
+        const prevFieldId = this.formFields[this.currentFocusIndex];
+        const prevField = document.getElementById(prevFieldId);
+        
+        if (prevField) {
+            prevField.focus();
+            
+            if (prevField.tagName === 'INPUT') {
+                prevField.select();
+            }
+        }
     }
     
     bindEvents() {
         // Navigation
-        document.querySelector('.back-btn')?.addEventListener('click', () => this.showDashboard());
-        document.querySelector('.back-to-sales-btn')?.addEventListener('click', () => this.showSalesList());
+        document.querySelector('.back-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.checkForUnsavedChanges()) {
+            this.showDashboard();
+        }
+    });
+    
+    document.querySelector('.back-to-sales-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.checkForUnsavedChanges()) {
+            this.showSalesList();
+        }
+    });
         
         // Sales Dashboard
         document.getElementById('create-sale-btn')?.addEventListener('click', () => this.showCreateInvoice());
@@ -145,6 +464,7 @@ class SalesManagement {
                 const filter = card.dataset.filter;
                 this.filterSalesByStatus(filter);
             });
+        document.getElementById('generate-report-btn')?.addEventListener('click', () => this.openReportModal());
         });
         
         // Select All Checkbox
@@ -159,24 +479,98 @@ class SalesManagement {
             invoiceDate.value = today;
             invoiceDate.max = today;
         }
+
+         // Search clear button
+        document.getElementById('clear-search-btn')?.addEventListener('click', () => {
+            this.clearSearch();
+        });
+        document.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-sale-btn');
+        const deleteBtn = e.target.closest('.delete-sale-btn');
+        
+        if (editBtn && editBtn.dataset.saleId) {
+            e.preventDefault();
+            this.editSale(editBtn.dataset.saleId);
+        }
+        
+        if (deleteBtn && deleteBtn.dataset.saleId) {
+            e.preventDefault();
+            this.deleteSale(deleteBtn.dataset.saleId);
+        }
+    });
+     setTimeout(() => this.setupChangeTracking(), 100);
     }
     
     // Navigation Methods
     showDashboard() {
-        this.showPage('sales-page');
-        this.currentPage = 'dashboard';
+    // Check if there are unsaved changes
+    if (this.hasUnsavedChanges && !this.isConfirmingLeave) {
+        this.showLeaveConfirmation();
+        return;
     }
+    
+    this.showPage('sales-page');
+    this.currentPage = 'dashboard';
+    this.resetChangeTracking();
+}
     
     showSalesList() {
-        this.showPage('sales-page');
-        this.currentPage = 'dashboard';
+    // Check if there are unsaved changes on invoice page
+    const isOnInvoicePage = document.getElementById('sales-invoice-page') && 
+                           !document.getElementById('sales-invoice-page').classList.contains('d-none');
+    
+    if (isOnInvoicePage && this.hasUnsavedChanges && !this.isConfirmingLeave) {
+        this.showLeaveConfirmation();
+        return;
     }
     
+    this.showPage('sales-page');
+    this.currentPage = 'dashboard';
+    this.resetChangeTracking();
+}
+    
     showCreateInvoice() {
-        this.showPage('sales-invoice-page');
-        this.currentPage = 'create-invoice';
-        this.generateInvoiceNumber();
+    // Check if there are unsaved changes
+    if (this.hasUnsavedChanges && !this.isConfirmingLeave) {
+        this.showLeaveConfirmation();
+        return;
     }
+    
+    // Reset edit mode first
+    this.resetEditMode();
+    
+    this.showPage('sales-invoice-page');
+    this.currentPage = 'create-invoice';
+    this.generateInvoiceNumber();
+    this.resetChangeTracking();
+    
+    // Reset form to clean state
+    this.clearAllInvoiceData();
+    
+    // Ensure button says "Save Invoice" and is enabled
+    const saveBtn = document.getElementById('save-invoice-btn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Invoice';
+        saveBtn.onclick = () => this.saveInvoice();
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('disabled');
+    }
+    
+    // Reset page title
+    const pageTitle = document.querySelector('.invoice-header h2');
+    if (pageTitle) {
+        pageTitle.textContent = 'Create Sale Invoice';
+    }
+    
+    // Reset focus to product field
+    setTimeout(() => {
+        const productField = document.getElementById('item-select');
+        if (productField) {
+            productField.focus();
+            this.currentFocusIndex = 0;
+        }
+    }, 100);
+}
     
     showPage(pageId) {
         // Hide all pages
@@ -391,92 +785,237 @@ class SalesManagement {
         `;
     } finally {
         this.isLoading = false;
+         this.clearSearch();
     }
 }
     
-    renderSalesTable() {
-    const tableBody = document.getElementById('sales-table-body');
-    
-    if (this.salesData.length === 0) {
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="9" class="text-center py-5">
-                    <div class="empty-state">
-                        <i class="fas fa-shopping-cart fa-3x mb-3 text-muted"></i>
-                        <h4>No Sales Invoices Found</h4>
-                        <p class="text-muted mb-4">You haven't created any sales invoices yet</p>
-                        <button class="btn btn-primary" onclick="salesManagement.showCreateInvoice()">
-                            <i class="fas fa-plus"></i> Create Your First Invoice
-                        </button>
-                        <p class="text-muted mt-3" style="font-size: 0.9rem;">
-                            Start by creating your first sales invoice to track your sales
-                        </p>
-                    </div>
+    renderSalesTable(isSearchMode = false) {
+        const tableBody = document.getElementById('sales-table-body');
+        const dataToRender = isSearchMode ? this.filteredSalesData : this.salesData;
+        
+        if (dataToRender.length === 0) {
+            let emptyMessage = '';
+            if (isSearchMode && this.searchTerm) {
+                emptyMessage = `
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <div class="empty-state">
+                                <i class="fas fa-search fa-3x mb-3 text-muted"></i>
+                                <h4>No Results Found</h4>
+                                <p class="text-muted mb-4">No sales invoices found for "<strong>${this.searchTerm}</strong>"</p>
+                                <button class="btn btn-outline" onclick="salesManagement.clearSearch()">
+                                    <i class="fas fa-times"></i> Clear Search
+                                </button>
+                                <p class="text-muted mt-3" style="font-size: 0.9rem;">
+                                    Try searching by invoice number, customer name, email, or amount
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                emptyMessage = `
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <div class="empty-state">
+                                <i class="fas fa-shopping-cart fa-3x mb-3 text-muted"></i>
+                                <h4>No Sales Invoices Found</h4>
+                                <p class="text-muted mb-4">You haven't created any sales invoices yet</p>
+                                <button class="btn btn-primary" onclick="salesManagement.showCreateInvoice()">
+                                    <i class="fas fa-plus"></i> Create Your First Invoice
+                                </button>
+                                <p class="text-muted mt-3" style="font-size: 0.9rem;">
+                                    Start by creating your first sales invoice to track your sales
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            tableBody.innerHTML = emptyMessage;
+            return;
+        }
+        
+        tableBody.innerHTML = dataToRender.map(sale => {
+            // Highlight search term in relevant fields
+            const invoiceNo = this.highlightText(sale.invoiceNo, this.searchTerm);
+            const customer = this.highlightText(sale.customer, this.searchTerm);
+            const amount = this.highlightText(formatCurrency(sale.amount), this.searchTerm);
+            const status = this.highlightText(sale.status, this.searchTerm);
+            const payment = this.highlightText(sale.payment, this.searchTerm);
+            
+            return `
+                <tr class="sale-row" data-sale-id="${sale.id}">
+                <td>
+                    <input type="checkbox" class="sale-checkbox" value="${sale.id}" 
+                           ${this.selectedSales.has(sale.id) ? 'checked' : ''}>
+                </td>
+                <td>${invoiceNo}</td>
+                <td>${sale.displayDate}</td>
+                <td>
+                    <div>${customer}</div>
+                    ${sale.customerEmail ? `<small class="text-muted">${this.highlightText(sale.customerEmail, this.searchTerm)}</small>` : ''}
+                </td>
+                <td>${amount}</td>
+                <td>
+                    <span class="status-badge status-${sale.status}">
+                        ${sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
+                    </span>
+                </td>
+                <td>
+                    <span class="payment-badge payment-${sale.payment}">
+                        ${sale.payment.charAt(0).toUpperCase() + sale.payment.slice(1)}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-outline btn-sm edit-sale-btn" 
+                            data-sale-id="${sale.id}" 
+                            title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline btn-sm btn-danger delete-sale-btn" 
+                            data-sale-id="${sale.id}" 
+                            title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </td>
             </tr>
-        `;
-        return;
+            `;
+        }).join('');
+        
+        // Make entire row clickable for preview (optional)
+        document.querySelectorAll('.sale-row').forEach(row => {
+            const saleId = row.dataset.saleId;
+            const invoiceNo = row.querySelector('td:nth-child(2)').textContent;
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', (e) => {
+                // Don't trigger if clicking on buttons or checkboxes
+                if (!e.target.closest('button') && !e.target.closest('input[type="checkbox"]')) {
+                    this.showInvoicePreview(saleId, invoiceNo);
+                }
+            });
+        });
+        
+        // Update sales count info
+        const salesCount = document.getElementById('sales-count-info');
+        if (salesCount) {
+            const totalCount = isSearchMode ? this.filteredSalesData.length : this.salesData.length;
+            const searchInfo = isSearchMode ? ` (${totalCount} results for "${this.searchTerm}")` : '';
+            salesCount.textContent = `Showing ${totalCount} sales invoices${searchInfo}`;
+        }
+        
+        // Re-bind checkbox events
+        document.querySelectorAll('.sale-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                this.toggleSaleSelection(e.target.value, e.target.checked);
+            });
+        });
     }
     
-    tableBody.innerHTML = this.salesData.map(sale => `
-        <tr class="sale-row" data-sale-id="${sale.id}">
-            <td>
-                <input type="checkbox" class="sale-checkbox" value="${sale.id}" 
-                       ${this.selectedSales.has(sale.id) ? 'checked' : ''}>
-            </td>
-            <td>${sale.invoiceNo}</td>
-            <td>${sale.displayDate}</td>
-            <td>
-                <div>${sale.customer}</div>
-            </td>
-            <td>${formatCurrency(sale.amount)}</td>
-            <td>
-                <span class="status-badge status-${sale.status}">
-                    ${sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
-                </span>
-            </td>
-            <td>
-                <span class="payment-badge payment-${sale.payment}">
-                    ${sale.payment.charAt(0).toUpperCase() + sale.payment.slice(1)}
-                </span>
-            </td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="salesManagement.editSale(${sale.id})" title="Edit">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="salesManagement.deleteSale(${sale.id})" title="Delete">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+     highlightText(text, searchTerm) {
+        if (!searchTerm || !text) return text;
+        
+        const regex = new RegExp(`(${searchTerm})`, 'gi');
+        return text.toString().replace(regex, '<mark class="search-highlight">$1</mark>');
+    }
+
+     highlightSearchTerms() {
+        if (!this.searchTerm) return;
+        
+        // Add CSS for search highlights if not already added
+        if (!document.getElementById('search-highlight-styles')) {
+            const style = document.createElement('style');
+            style.id = 'search-highlight-styles';
+            style.textContent = `
+                .search-highlight {
+                    background-color: #fff3cd !important;
+                    color: #856404 !important;
+                    padding: 1px 3px;
+                    border-radius: 2px;
+                    font-weight: bold;
+                }
+                
+                .sale-row:hover .search-highlight {
+                    background-color: #ffeaa7 !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
     
-    // Make entire row clickable for preview (optional)
-    document.querySelectorAll('.sale-row').forEach(row => {
-        const saleId = row.dataset.saleId;
-        const invoiceNo = row.querySelector('td:nth-child(2)').textContent;
-        row.style.cursor = 'pointer';
-        row.addEventListener('click', (e) => {
-            // Don't trigger if clicking on buttons or checkboxes
-            if (!e.target.closest('button') && !e.target.closest('input[type="checkbox"]')) {
-                this.showInvoicePreview(saleId, invoiceNo);
+    highlightFirstResult() {
+        if (this.filteredSalesData.length > 0) {
+            const firstRow = document.querySelector('.sale-row');
+            if (firstRow) {
+                firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstRow.classList.add('selected-row');
+                
+                // Remove highlight after 2 seconds
+                setTimeout(() => {
+                    firstRow.classList.remove('selected-row');
+                }, 2000);
             }
-        });
-    });
-    
-    // Update sales count info
-    const salesCount = document.getElementById('sales-count-info');
-    if (salesCount) {
-        salesCount.textContent = `Showing ${this.salesData.length} sales invoices`;
+        }
     }
     
-    // Re-bind checkbox events
-    document.querySelectorAll('.sale-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', (e) => {
-            this.toggleSaleSelection(e.target.value, e.target.checked);
-        });
-    });
-}   
+    clearSearch() {
+        const searchInput = document.getElementById('sales-search-input');
+        const clearBtn = document.getElementById('clear-search-btn');
+        
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        
+        if (clearBtn) {
+            clearBtn.style.display = 'none';
+        }
+        
+        this.searchTerm = '';
+        this.isSearchActive = false;
+        this.filteredSalesData = [...this.salesData];
+        this.renderSalesTable();
+        this.updateSearchResultsCount();
+        
+        // Focus back on search input for quick typing
+        if (searchInput) {
+            searchInput.focus();
+        }
+    }
+    
+    updateSearchResultsCount() {
+        const searchInfo = document.getElementById('sales-search-info');
+        if (!searchInfo) {
+            // Create search info element if it doesn't exist
+            const tableFooter = document.querySelector('.table-footer');
+            if (tableFooter) {
+                const infoDiv = document.createElement('div');
+                infoDiv.id = 'sales-search-info';
+                infoDiv.className = 'text-muted small mt-2';
+                tableFooter.appendChild(infoDiv);
+            }
+        }
+        
+        const infoElement = document.getElementById('sales-search-info');
+        if (infoElement) {
+            if (this.isSearchActive && this.searchTerm) {
+                infoElement.innerHTML = `
+                    <i class="fas fa-search me-1"></i>
+                    Found <strong>${this.filteredSalesData.length}</strong> of <strong>${this.salesData.length}</strong> invoices 
+                    matching "<strong>${this.searchTerm}</strong>"
+                    ${this.filteredSalesData.length > 0 ? 
+                        `<button class="btn btn-sm btn-outline ms-2" onclick="salesManagement.clearSearch()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>` : 
+                        ''
+                    }
+                `;
+                infoElement.style.display = 'block';
+            } else {
+                infoElement.style.display = 'none';
+            }
+        }
+    }
     
     updateStats() {
         const totalSales = this.salesData.length;
@@ -663,6 +1202,11 @@ class SalesManagement {
                 </span>`;
         }
         stockInfo.style.display = 'block';
+         // Auto-select the quantity field after product is selected
+            setTimeout(() => {
+                document.getElementById('item-quantity')?.focus();
+                document.getElementById('item-quantity')?.select();
+            }, 50);
     } else {
         document.getElementById('stock-info').style.display = 'none';
         document.getElementById('item-price').value = '0.00';
@@ -677,6 +1221,14 @@ class SalesManagement {
         const subtotal = quantity * price;
         
         document.getElementById('item-subtotal').value = subtotal.toFixed(2);
+        
+        // Auto-focus price field after quantity is entered
+        if (quantity > 0 && this.currentFocusIndex === 1) {
+            setTimeout(() => {
+                document.getElementById('item-price')?.focus();
+                document.getElementById('item-price')?.select();
+            }, 50);
+        }
     }
     
     addItemToInvoice() {
@@ -686,7 +1238,15 @@ class SalesManagement {
     
     if (!itemName || !quantity || quantity <= 0 || !price || price <= 0) {
         this.showError('Please fill all required fields with valid values');
-        return;
+        // Focus on the problematic field
+            if (!itemName) {
+                document.getElementById('item-select').focus();
+            } else if (!quantity || quantity <= 0) {
+                document.getElementById('item-quantity').focus();
+            } else {
+                document.getElementById('item-price').focus();
+            }
+            return;
     }
     
     // Check if product exists
@@ -731,56 +1291,260 @@ class SalesManagement {
     if (index !== -1) {
         this.products[index] = updatedProduct;
         this.populateProductDatalist();
+        setTimeout(() => {
+            document.getElementById('item-select').focus();
+            this.currentFocusIndex = 0;
+        }, 100);
     }
 }
     
     renderInvoiceItems() {
-        const tableBody = document.getElementById('invoice-items-body');
-        
-        if (this.invoiceItems.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center py-5">
-                        <div class="text-muted">
-                            <i class="fas fa-box-open fa-2x mb-3"></i>
-                            <p>No items added to invoice</p>
-                            <small>Add products to create your invoice</small>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        tableBody.innerHTML = this.invoiceItems.map(item => `
-            <tr data-item-id="${item.id}">
-                <td>${item.name}</td>
-                <td>${item.quantity} ${item.product?.unit || 'pcs'}</td>
-                <td>${formatCurrency(item.price)}</td>
-                <td>${formatCurrency(item.subtotal)}</td>
-                <td>
-                    <button class="btn btn-outline btn-sm btn-danger" onclick="salesManagement.removeInvoiceItem(${item.id})" title="Remove">
-                        <i class="fas fa-trash"></i>
-                    </button>
+    const tableBody = document.getElementById('invoice-items-body');
+    
+    if (this.invoiceItems.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-5">
+                    <div class="text-muted">
+                        <i class="fas fa-box-open fa-2x mb-3"></i>
+                        <p>No items added to invoice</p>
+                        <small>Add products to create your invoice</small>
+                    </div>
                 </td>
             </tr>
-        `).join('');
+        `;
+        return;
     }
     
-    removeInvoiceItem(itemId) {
-    const itemToRemove = this.invoiceItems.find(item => item.id === itemId);
-    if (itemToRemove) {
-        // Restore stock to product list
-        const productIndex = this.products.findIndex(p => p.id === itemToRemove.product_id);
-        if (productIndex !== -1) {
-            this.products[productIndex].current_stock += itemToRemove.quantity;
-            this.populateProductDatalist();
+    tableBody.innerHTML = this.invoiceItems.map((item, index) => {
+        // Generate a unique ID for each item
+        const itemTempId = item.tempId || `item-${index}-${Date.now()}`;
+        if (!item.tempId) item.tempId = itemTempId;
+        
+        return `
+        <tr data-item-id="${itemTempId}" data-product-id="${item.product_id}" data-item-index="${index}">
+            <td class="item-name-cell">
+                <div class="item-name">${item.name}</div>
+                <small class="text-muted item-unit">${item.product?.unit || 'pcs'}</small>
+            </td>
+            <td class="item-quantity-cell">
+                <input type="number" 
+                       class="form-control form-control-sm item-quantity-input" 
+                       value="${item.quantity}" 
+                       min="0.01" 
+                       step="0.01"
+                       data-original="${item.quantity}"
+                       data-item-id="${itemTempId}"
+                       style="width: 80px;">
+            </td>
+            <td class="item-price-cell">
+                <input type="number" 
+                       class="form-control form-control-sm item-price-input" 
+                       value="${item.price}" 
+                       min="0" 
+                       step="0.01"
+                       data-original="${item.price}"
+                       data-item-id="${itemTempId}"
+                       style="width: 100px;">
+            </td>
+            <td class="item-subtotal-cell">
+                <span class="item-subtotal">${formatCurrency(item.subtotal)}</span>
+            </td>
+            <td>
+                <button class="btn btn-outline btn-sm btn-danger remove-item-btn" 
+                        data-item-id="${itemTempId}"
+                        title="Remove">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button class="btn btn-outline btn-sm btn-success update-item-btn ms-1" 
+                        data-item-id="${itemTempId}"
+                        title="Update" style="display: none;">
+                    <i class="fas fa-check"></i>
+                </button>
+            </td>
+        </tr>
+    `}).join('');
+    
+    // Add inline editing event listeners
+    this.bindInlineEditingEvents();
+}
+
+bindInlineEditingEvents() {
+    // Quantity input change
+    document.querySelectorAll('.item-quantity-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            this.handleItemInputChange(e.target);
+        });
+        
+        input.addEventListener('input', (e) => {
+            this.handleItemInputChange(e.target);
+        });
+        
+        input.addEventListener('focus', (e) => {
+            e.target.select();
+        });
+    });
+    
+    // Price input change
+    document.querySelectorAll('.item-price-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            this.handleItemInputChange(e.target);
+        });
+        
+        input.addEventListener('input', (e) => {
+            this.handleItemInputChange(e.target);
+        });
+        
+        input.addEventListener('focus', (e) => {
+            e.target.select();
+        });
+    });
+    
+    // Remove button
+    document.querySelectorAll('.remove-item-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            const itemId = row.dataset.itemId;
+            this.removeInvoiceItem(itemId);
+        });
+    });
+}
+
+handleItemInputChange(input) {
+    const row = input.closest('tr');
+    if (!row) return;
+    
+    const itemTempId = row.dataset.itemId;
+    const quantityInput = row.querySelector('.item-quantity-input');
+    const priceInput = row.querySelector('.item-price-input');
+    const subtotalSpan = row.querySelector('.item-subtotal');
+    const updateBtn = row.querySelector('.update-item-btn');
+    
+    if (!itemTempId || !quantityInput || !priceInput || !subtotalSpan) return;
+    
+    const quantity = parseFloat(quantityInput.value) || 0;
+    const price = parseFloat(priceInput.value) || 0;
+    const subtotal = quantity * price;
+    
+    // Update subtotal display
+    subtotalSpan.textContent = formatCurrency(subtotal);
+    
+    // Show update button if value changed
+    const originalQuantity = parseFloat(quantityInput.dataset.original) || 0;
+    const originalPrice = parseFloat(priceInput.dataset.original) || 0;
+    
+    if (quantity !== originalQuantity || price !== originalPrice) {
+        updateBtn.style.display = 'inline-block';
+        
+        // Clear any existing click handlers and add new one
+        updateBtn.replaceWith(updateBtn.cloneNode(true));
+        const newUpdateBtn = row.querySelector('.update-item-btn');
+        newUpdateBtn.style.display = 'inline-block';
+        
+        // Use proper closure to capture the current values
+        newUpdateBtn.onclick = () => {
+            this.updateInvoiceItem(itemTempId, quantity, price);
+        };
+    } else {
+        updateBtn.style.display = 'none';
+    }
+    
+    // Update grand total
+    this.updateGrandTotal();
+}
+
+ updateInvoiceItem(itemTempId, newQuantity, newPrice) {
+    // Find the correct item using tempId
+    const itemIndex = this.invoiceItems.findIndex(item => 
+        String(item.tempId) === String(itemTempId)
+    );
+    
+    if (itemIndex === -1) {
+        console.error('Item not found with tempId:', itemTempId);
+        return;
+    }
+    
+    const item = this.invoiceItems[itemIndex];
+    const oldQuantity = item.quantity;
+    const oldPrice = item.price;
+    
+    console.log('Updating item:', {
+        itemIndex,
+        itemTempId,
+        oldQuantity,
+        newQuantity,
+        oldPrice,
+        newPrice,
+        itemName: item.name
+    });
+    
+    // Update item data
+    item.quantity = newQuantity;
+    item.price = newPrice;
+    item.subtotal = newQuantity * newPrice;
+    
+    // Update UI
+    const row = document.querySelector(`tr[data-item-id="${itemTempId}"]`);
+    if (row) {
+        const quantityInput = row.querySelector('.item-quantity-input');
+        const priceInput = row.querySelector('.item-price-input');
+        const updateBtn = row.querySelector('.update-item-btn');
+        const subtotalSpan = row.querySelector('.item-subtotal');
+        
+        if (quantityInput && priceInput && updateBtn && subtotalSpan) {
+            // Update original values
+            quantityInput.dataset.original = newQuantity;
+            priceInput.dataset.original = newPrice;
+            
+            // Update subtotal display
+            subtotalSpan.textContent = formatCurrency(item.subtotal);
+            
+            // Hide update button
+            updateBtn.style.display = 'none';
         }
     }
     
-    this.invoiceItems = this.invoiceItems.filter(item => item.id !== itemId);
-    this.renderInvoiceItems();
+    // Update grand total without re-rendering entire table
     this.updateGrandTotal();
+    
+    // Mark changes
+    this.hasUnsavedChanges = true;
+    
+    showNotification('Success', `"${item.name}" updated successfully`, 'success');
+} 
+    removeInvoiceItem(itemTempId) {
+    const itemIndex = this.invoiceItems.findIndex(item => 
+        (item.tempId == itemTempId || item.id == itemTempId)
+    );
+    
+    if (itemIndex === -1) return;
+    
+    const itemToRemove = this.invoiceItems[itemIndex];
+    
+    if (confirm('Are you sure you want to remove this item?')) {
+        // If editing an existing invoice, restore stock
+        if (this.editingSaleId && itemToRemove.product_id && itemToRemove.quantity) {
+            // Stock will be handled during the update process
+            console.log('Item to be removed during edit:', itemToRemove);
+        }
+        
+        // Remove from array
+        this.invoiceItems.splice(itemIndex, 1);
+        
+        // Refresh product list if not in edit mode
+        if (!this.editingSaleId && itemToRemove.product) {
+            const productIndex = this.products.findIndex(p => p.id === itemToRemove.product_id);
+            if (productIndex !== -1) {
+                this.products[productIndex].current_stock += itemToRemove.quantity;
+                this.populateProductDatalist();
+            }
+        }
+        
+        this.renderInvoiceItems();
+        this.updateGrandTotal();
+        
+        showNotification('Success', 'Item removed from invoice', 'success');
+    }
 }
     
     updateGrandTotal() {
@@ -792,26 +1556,16 @@ class SalesManagement {
     }
     
     clearInvoice() {
-    if (this.invoiceItems.length === 0) return;
+    if (this.invoiceItems.length === 0 && 
+        !document.getElementById('customer-select').value && 
+        !document.getElementById('invoice-notes').value) {
+        return;
+    }
     
-    if (confirm('Are you sure you want to clear all items from the invoice?')) {
-        // Restore stock for all items
-        this.invoiceItems.forEach(item => {
-            const productIndex = this.products.findIndex(p => p.id === item.product_id);
-            if (productIndex !== -1) {
-                this.products[productIndex].current_stock += item.quantity;
-            }
-        });
-        
-        this.invoiceItems = [];
-        this.renderInvoiceItems();
-        this.updateGrandTotal();
-        document.getElementById('invoice-notes').value = '';
-        document.getElementById('customer-select').value = '';
-        document.getElementById('invoice-date').value = new Date().toISOString().split('T')[0];
-        
-        // Refresh product list
-        this.populateProductDatalist();
+    if (confirm('Are you sure you want to clear the current invoice? All items and data will be lost.')) {
+        this.clearAllInvoiceData();
+        this.resetChangeTracking();
+        showNotification('Info', 'Invoice cleared successfully', 'info');
     }
 }
 
@@ -1025,7 +1779,7 @@ class SalesManagement {
             <div class="parties-section">
                 <!-- From Section -->
                 <div class="party-card from-section">
-                    <div class="section-title">From:</div>
+                    <div class="section-title-invoice">From:</div>
                     <div class="party-details">
                         <div class="party-name">${businessName}</div>
                         <div class="party-contact"></div>
@@ -1040,7 +1794,7 @@ class SalesManagement {
                 
                 <!-- To Section -->
                 <div class="party-card to-section">
-                    <div class="section-title">To:</div>
+                    <div class="section-title-invoice">To:</div>
                     <div class="party-details">
                         <div class="party-name">${customerName}</div>
                         <div class="party-contact">${customerContact}</div>
@@ -1544,77 +2298,78 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
     }
     
     async saveInvoice() {
-        if (!currentBusiness?.id) {
-            this.showError('No business selected. Please select a business first.');
-            return;
+    if (!currentBusiness?.id) {
+        this.showError('No business selected. Please select a business first.');
+        return;
+    }
+    
+    const customerId = document.getElementById('customer-select').value;
+    const invoiceDate = document.getElementById('invoice-date').value;
+    const notes = document.getElementById('invoice-notes').value;
+    const invoiceNumber = document.getElementById('invoice-number').value;
+    
+    if (!customerId) {
+        this.showError('Please select a customer');
+        return;
+    }
+    
+    if (this.invoiceItems.length === 0) {
+        this.showError('Please add at least one item to the invoice');
+        return;
+    }
+    
+    let saveBtn = null;
+    let originalText = '';
+    
+    try {
+        // Show loading state
+        saveBtn = document.getElementById('save-invoice-btn');
+        if (saveBtn) {
+            originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            saveBtn.disabled = true;
         }
         
-        const customerId = document.getElementById('customer-select').value;
-        const invoiceDate = document.getElementById('invoice-date').value;
-        const notes = document.getElementById('invoice-notes').value;
+        // Calculate totals
+        const totalAmount = this.invoiceItems.reduce((sum, item) => sum + item.subtotal, 0);
         
-        if (!customerId) {
-            this.showError('Please select a customer');
-            return;
+        // Get selected customer details
+        const selectedCustomer = this.customers.find(c => c.id == customerId);
+        
+        if (!selectedCustomer) {
+            throw new Error('Selected customer not found in parties table');
         }
         
-        if (this.invoiceItems.length === 0) {
-            this.showError('Please add at least one item to the invoice');
-            return;
+        // Verify the customer exists
+        const { data: partyCheck, error: partyError } = await supabase
+            .from('parties')
+            .select('id')
+            .eq('id', customerId)
+            .eq('business_id', currentBusiness.id)
+            .single();
+        
+        if (partyError || !partyCheck) {
+            throw new Error('Customer/Party not found in database. Please select a valid customer.');
         }
         
-        let saveBtn = null;
-        let originalText = '';
+        // Create sale record
+        const saleData = {
+            business_id: currentBusiness.id,
+            customer_id: customerId,
+            invoice_number: invoiceNumber,
+            sale_date: invoiceDate,
+            total_amount: totalAmount,
+            status: 'completed',
+            payment_status: 'paid',
+            notes: notes || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
         
-        try {
-            // Show loading state
-            saveBtn = document.getElementById('save-invoice-btn');
-            if (saveBtn) {
-                originalText = saveBtn.innerHTML;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-                saveBtn.disabled = true;
-            }
-            
-            // Calculate totals
-            const totalAmount = this.invoiceItems.reduce((sum, item) => sum + item.subtotal, 0);
-            const invoiceNumber = document.getElementById('invoice-number').value;
-            
-            // Get selected customer details
-            const selectedCustomer = this.customers.find(c => c.id == customerId);
-            
-            if (!selectedCustomer) {
-                throw new Error('Selected customer not found in parties table');
-            }
-            
-            // Verify the customer exists
-            const { data: partyCheck, error: partyError } = await supabase
-                .from('parties')
-                .select('id')
-                .eq('id', customerId)
-                .eq('business_id', currentBusiness.id)
-                .single();
-            
-            if (partyError || !partyCheck) {
-                throw new Error('Customer/Party not found in database. Please select a valid customer.');
-            }
-            
-            // Create sale record
-            const saleData = {
-                business_id: currentBusiness.id,
-                customer_id: customerId,
-                invoice_number: invoiceNumber,
-                sale_date: invoiceDate,
-                total_amount: totalAmount,
-                status: 'completed',
-                payment_status: 'paid',
-                notes: notes || '',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
-            
-            console.log('Saving sale data:', saleData);
-            
-            // Check for duplicate invoice number
+        console.log('Saving sale data:', saleData);
+        
+        // Check for duplicate invoice number (only if not in edit mode)
+        if (!this.editingSaleId) {
             const { data: existingInvoice } = await supabase
                 .from('sales')
                 .select('id')
@@ -1624,135 +2379,154 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
             
             if (existingInvoice) {
                 this.showError(`Invoice number ${invoiceNumber} already exists. Generating new number...`);
-                this.generateInvoiceNumber();
-                saleData.invoice_number = document.getElementById('invoice-number').value;
+                
+                // Generate a new unique invoice number
+                const newInvoiceNumber = await this.generateUniqueInvoiceNumber();
+                document.getElementById('invoice-number').value = newInvoiceNumber;
+                saleData.invoice_number = newInvoiceNumber;
+                
                 console.log('Using new invoice number:', saleData.invoice_number);
-            }
-            
-            // Insert sale
-            const { data: sale, error: saleError } = await supabase
-                .from('sales')
-                .insert([saleData])
-                .select()
-                .single();
-            
-            if (saleError) {
-                console.error('Sale insert error:', saleError);
-                throw saleError;
-            }
-            
-            console.log('Sale created with ID:', sale.id);
-            
-            // Create sale items - Based on your actual schema:
-            // id, sale_id, product_id, quantity, unit_price, total_price, created_at
-            const saleItems = this.invoiceItems.map(item => {
-                const totalPrice = item.quantity * item.price;
                 
-                // Only include columns that exist in your table
-                return {
-                    sale_id: sale.id,
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    unit_price: item.price,
-                    total_price: totalPrice,
-                    created_at: new Date().toISOString()
-                    // NO updated_at column in your table
-                };
-            });
-            
-            console.log('Saving sale items:', saleItems);
-            
-            if (saleItems.length > 0) {
-                const { error: itemsError } = await supabase
-                    .from('sale_items')
-                    .insert(saleItems);
-                
-                if (itemsError) {
-                    console.error('Sale items insert error:', itemsError);
-                    
-                    // If error is about updated_at, try without it
-                    if (itemsError.message && itemsError.message.includes('updated_at')) {
-                        console.log('Retrying without updated_at column...');
-                        
-                        // Remove updated_at from all items
-                        const saleItemsWithoutUpdatedAt = saleItems.map(item => {
-                            // Create new object without updated_at
-                            const { updated_at, ...rest } = item;
-                            return rest;
-                        });
-                        
-                        console.log('Sale items without updated_at:', saleItemsWithoutUpdatedAt);
-                        
-                        const { error: retryError } = await supabase
-                            .from('sale_items')
-                            .insert(saleItemsWithoutUpdatedAt);
-                        
-                        if (retryError) throw retryError;
-                    } else {
-                        throw itemsError;
-                    }
+                // Update the button text to reflect we're still saving
+                if (saveBtn) {
+                    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving with new number...';
                 }
             }
-            
-            // Update product stock
-            for (const item of this.invoiceItems) {
-                const newStock = item.product.current_stock - item.quantity;
-                console.log(`Updating product ${item.product_id} stock from ${item.product.current_stock} to ${newStock}`);
-                
-                const { error: stockError } = await supabase
-                    .from('products')
-                    .update({
-                        current_stock: newStock,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', item.product_id);
-                
-                if (stockError) {
-                    console.error('Error updating stock:', stockError);
-                    // Continue with other products even if one fails
-                }
+        }
+        
+        // If we're in edit mode, use updateInvoice instead
+        if (this.editingSaleId) {
+            console.log('In edit mode, redirecting to updateInvoice');
+            // Restore button state
+            if (saveBtn) {
+                saveBtn.innerHTML = originalText || '<i class="fas fa-sync-alt"></i> Update Invoice';
+                saveBtn.disabled = false;
             }
             
-            // Show success message
-            showNotification('Success', `Invoice #${saleData.invoice_number} saved successfully for ${selectedCustomer?.name || 'customer'}!`, 'success');
+            // Call updateInvoice instead
+            return this.updateInvoice();
+        }
+        
+        // Insert sale (only for new invoices)
+        const { data: sale, error: saleError } = await supabase
+            .from('sales')
+            .insert([saleData])
+            .select()
+            .single();
+        
+        if (saleError) {
+            console.error('Sale insert error:', saleError);
+            throw saleError;
+        }
+        
+        console.log('Sale created with ID:', sale.id);
+        
+        // Create sale items
+        const saleItems = this.invoiceItems.map(item => {
+            const totalPrice = item.quantity * item.price;
             
-            // Reset form and go back to sales list
-            this.clearInvoice();
-            this.showSalesList();
-            await this.loadSalesData();
-
-            if (sale && sale.id) {
+            return {
+                sale_id: sale.id,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: item.price,
+                total_price: totalPrice,
+                created_at: new Date().toISOString()
+            };
+        });
+        
+        console.log('Saving sale items:', saleItems);
+        
+        if (saleItems.length > 0) {
+            const { error: itemsError } = await supabase
+                .from('sale_items')
+                .insert(saleItems);
+            
+            if (itemsError) {
+                console.error('Sale items insert error:', itemsError);
+                throw itemsError;
+            }
+        }
+        
+        // Update product stock
+        for (const item of this.invoiceItems) {
+            const newStock = item.product.current_stock - item.quantity;
+            console.log(`Updating product ${item.product_id} stock from ${item.product.current_stock} to ${newStock}`);
+            
+            const { error: stockError } = await supabase
+                .from('products')
+                .update({
+                    current_stock: newStock,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', item.product_id);
+            
+            if (stockError) {
+                console.error('Error updating stock:', stockError);
+                // Continue with other products even if one fails
+            }
+        }
+        
+        // Show success message
+        showNotification('Success', `Invoice #${saleData.invoice_number} saved successfully for ${selectedCustomer?.name || 'customer'}!`, 'success');
+        
+        // Reset form and go back to sales list
+        this.resetEditMode();
+        this.resetChangeTracking();
+        this.showSalesList();
+        await this.loadSalesData();
+        
+        if (sale && sale.id) {
             // Show the invoice preview
             await this.showInvoicePreview(sale.id, saleData.invoice_number);
         }
-            
-        } catch (error) {
-            console.error('Error saving invoice:', error);
-            
-            // More specific error messages
-            if (error.code === 'PGRST204') {
-                const columnMatch = error.message.match(/'([^']+)'/);
-                const columnName = columnMatch ? columnMatch[1] : 'unknown column';
-                this.showError(`Database column error: Column '${columnName}' does not exist in sale_items table. 
-                Your table has: id, sale_id, product_id, quantity, unit_price, total_price, created_at`);
-            } else if (error.code === '23503') {
-                this.showError('Foreign key violation. Check if customer or products exist.');
-            } else if (error.code === '23505') {
-                this.showError('Duplicate invoice number. Please try again with a different invoice number.');
-            } else if (error.code === '42703') {
-                this.showError('Database column error. Please check your database schema.');
-            } else {
-                this.showError('Failed to save invoice: ' + (error.message || 'Unknown error'));
+        
+    } catch (error) {
+        console.error('Error saving invoice:', error);
+        
+        // More specific error messages
+        if (error.code === 'PGRST204') {
+            const columnMatch = error.message.match(/'([^']+)'/);
+            const columnName = columnMatch ? columnMatch[1] : 'unknown column';
+            this.showError(`Database column error: Column '${columnName}' does not exist in sale_items table.`);
+        } else if (error.code === '23503') {
+            this.showError('Foreign key violation. Check if customer or products exist.');
+        } else if (error.code === '23505') {
+            // This is the duplicate invoice number error
+            // Generate a new number and retry
+            try {
+                const newInvoiceNumber = await this.generateUniqueInvoiceNumber();
+                this.showError(`Invoice number already exists. Generated new number: ${newInvoiceNumber}`);
+                document.getElementById('invoice-number').value = newInvoiceNumber;
+                
+                // Retry save with new number
+                if (saveBtn) {
+                    saveBtn.innerHTML = '<i class="fas fa-redo"></i> Retry with new number';
+                    saveBtn.disabled = false;
+                    saveBtn.onclick = () => {
+                        this.saveInvoice();
+                    };
+                }
+            } catch (retryError) {  
             }
-            
-        } finally {
-            // Restore button state
-            if (saveBtn) {
-                saveBtn.innerHTML = originalText || '<i class="fas fa-save"></i> Save Invoice';
-                saveBtn.disabled = false;
+        } else if (error.code === '42703') {
+            this.showError('Database column error. Please check your database schema.');
+        } else {
+            this.showError('Failed to save invoice: ' + (error.message || 'Unknown error'));
+        }
+        
+    } finally {
+        // Restore button state only if not already restored
+        if (saveBtn && !saveBtn.disabled) {
+            saveBtn.innerHTML = originalText || '<i class="fas fa-save"></i> Save Invoice';
+            saveBtn.disabled = false;
+            // Ensure onclick handler is correct
+            if (!this.editingSaleId) {
+                saveBtn.onclick = () => this.saveInvoice();
             }
         }
     }
+}
     
     addInvoicePreviewStyles() {
     const style = document.createElement('style');
@@ -1816,7 +2590,7 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
             border-bottom: 1px dashed #e0e0e0;
         }
         
-        .section-title {
+        .section-title-invoice {
             font-size: 14px;
             font-weight: 700;
             color: #4f6df5;
@@ -1854,6 +2628,7 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
             font-weight: 600;
             color: #4f6df5;
             border-bottom: 2px solid #eaeaea;
+            font-size:14px;
         }
         
         .invoice-items-table tbody tr {
@@ -1867,6 +2642,7 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
         .invoice-items-table td {
             padding: 15px;
             vertical-align: top;
+            font-size:14px;
         }
         
         .item-name {
@@ -2234,62 +3010,431 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
     }
     
     async editSale(saleId = null) {
-        const saleIdToEdit = saleId || this.currentSaleId;
-        if (!saleIdToEdit) return;
+    const saleIdToEdit = saleId || this.currentSaleId;
+    if (!saleIdToEdit) return;
+    
+    console.log('Editing sale ID:', saleIdToEdit);
+    
+    // Store the sale ID being edited
+    this.editingSaleId = parseInt(saleIdToEdit);
+    
+    // Hide modal first if open
+    this.hideSaleDetails();
+    
+    // Show create invoice page but change title
+    this.showPage('sales-invoice-page');
+    this.currentPage = 'update-invoice'; // Change this
+    
+    try {
+        // Change button text to "Update Invoice"
+        const saveBtn = document.getElementById('save-invoice-btn');
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Update Invoice';
+            saveBtn.onclick = () => this.updateInvoice();
+            saveBtn.disabled = false; // Ensure button is enabled
+        }
         
-        // Hide modal first
-        this.hideSaleDetails();
+        // Update page title
+        const pageTitle = document.querySelector('.sale-invoice-header h1');
+        if (pageTitle) {
+            pageTitle.textContent = 'Update Sale Invoice';
+        }
         
-        // Show edit interface
-        this.showCreateInvoice();
+        // Load sale data for editing
+        const { data: sale, error } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('id', saleIdToEdit)
+            .eq('business_id', currentBusiness.id)
+            .single();
         
-        try {
-            // Load sale data for editing
-            const { data: sale, error } = await supabase
-                .from('sales')
-                .select('*')
-                .eq('id', saleIdToEdit)
-                .eq('business_id', currentBusiness.id)
-                .single();
+        if (error) throw error;
+        
+        if (sale) {
+            // Store original invoice number for validation
+            this.originalInvoiceNumber = sale.invoice_number;
             
-            if (error) throw error;
+            // Populate form with sale data - DISABLE invoice number field for editing
+            const invoiceNumberField = document.getElementById('invoice-number');
+            invoiceNumberField.value = sale.invoice_number;
+            invoiceNumberField.readOnly = true; // Make it read-only
+            invoiceNumberField.title = "Invoice number cannot be changed when editing";
+            invoiceNumberField.classList.add('bg-light');
             
-            if (sale) {
-                // Fetch sale items
-                const { data: saleItems } = await supabase
-    .from('sale_items')
-    .select(`
-        *,
-        products (*)
-    `)
-    .eq('sale_id', saleIdToEdit);
-                
-                // Populate form with sale data
-                document.getElementById('invoice-number').value = sale.invoice_number;
-                document.getElementById('customer-select').value = sale.customer_id;
-                document.getElementById('invoice-date').value = sale.sale_date?.split('T')[0] || '';
-                document.getElementById('invoice-notes').value = sale.notes || '';
-                
-                // Load items
-                this.invoiceItems = (saleItems || []).map(item => ({
-        id: Date.now(),
-        product_id: item.product_id,
-        name: item.products?.name || 'Unknown',
-        quantity: item.quantity,
-        price: item.unit_price,
-        subtotal: item.total_price || item.quantity * item.unit_price, // Use total_price
-        product: item.products
-    }));
-                
-                this.renderInvoiceItems();
-                this.updateGrandTotal();
+            document.getElementById('customer-select').value = sale.customer_id;
+            document.getElementById('invoice-date').value = sale.sale_date?.split('T')[0] || '';
+            document.getElementById('invoice-notes').value = sale.notes || '';
+            
+            // Fetch sale items
+            const { data: saleItems, error: itemsError } = await supabase
+                .from('sale_items')
+                .select(`
+                    *,
+                    products (*)
+                `)
+                .eq('sale_id', saleIdToEdit);
+            
+            if (itemsError) {
+                console.error('Error loading sale items:', itemsError);
             }
             
-        } catch (error) {
-            console.error('Error loading sale for edit:', error);
-            this.showError('Failed to load sale for editing');
+            // Clear current items and load items for editing
+            this.invoiceItems = [];
+            
+            if (saleItems && saleItems.length > 0) {
+                saleItems.forEach(item => {
+                    const productData = item.products || {};
+                    const saleItem = {
+                        id: item.id, // Use actual item ID for editing
+                        tempId: Date.now() + Math.random(), // Unique temporary ID for UI
+                        sale_id: item.sale_id,
+                        product_id: item.product_id,
+                        name: productData.name || 'Unknown Product',
+                        quantity: item.quantity,
+                        price: item.unit_price,
+                        subtotal: item.total_price || (item.quantity * item.unit_price),
+                        product: productData,
+                        originalQuantity: item.quantity // Store original for stock restoration
+                    };
+                    this.invoiceItems.push(saleItem);
+                });
+            }
+            
+            this.renderInvoiceItems();
+            this.updateGrandTotal();
+            
+            // Show edit mode indicator
+            this.showEditModeIndicator();
+            
+            // Reset change tracking since we loaded existing data
+            this.hasUnsavedChanges = false;
+        }
+        
+    } catch (error) {
+        console.error('Error loading sale for edit:', error);
+        this.showError('Failed to load sale for editing: ' + error.message);
+        // Reset editing mode on error
+        this.resetEditMode();
+    }
+}
+
+async updateInvoice() {
+    if (!this.editingSaleId) {
+        this.showError('No sale selected for update');
+        return;
+    }
+    
+    if (!currentBusiness?.id) {
+        this.showError('No business selected');
+        return;
+    }
+    
+    const customerId = document.getElementById('customer-select').value;
+    const invoiceDate = document.getElementById('invoice-date').value;
+    const notes = document.getElementById('invoice-notes').value;
+    const invoiceNumber = document.getElementById('invoice-number').value;
+
+     if (invoiceNumber !== this.originalInvoiceNumber) {
+        this.showError('Invoice number cannot be changed. Please use the original invoice number.');
+        document.getElementById('invoice-number').value = this.originalInvoiceNumber;
+        return;
+    }
+    
+    if (!customerId) {
+        this.showError('Please select a customer');
+        return;
+    }
+    
+    if (this.invoiceItems.length === 0) {
+        this.showError('Please add at least one item to the invoice');
+        return;
+    }
+    
+    // Validate invoice number uniqueness (excluding current invoice)
+    if (invoiceNumber !== this.originalInvoiceNumber) {
+        const { data: existingInvoice } = await supabase
+            .from('sales')
+            .select('id')
+            .eq('business_id', currentBusiness.id)
+            .eq('invoice_number', invoiceNumber)
+            .neq('id', this.editingSaleId)
+            .maybeSingle();
+        
+        if (existingInvoice) {
+            this.showError(`Invoice number ${invoiceNumber} already exists. Please use a different number.`);
+            return;
         }
     }
+    
+    let updateBtn = null;
+    let originalText = '';
+    
+    try {
+        // Show loading state
+        updateBtn = document.getElementById('save-invoice-btn');
+        if (updateBtn) {
+            originalText = updateBtn.innerHTML;
+            updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            updateBtn.disabled = true;
+        }
+        
+        // Calculate totals
+        const totalAmount = this.invoiceItems.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        // 1. Update the sale record
+        const { error: saleError } = await supabase
+            .from('sales')
+            .update({
+                customer_id: customerId,
+                invoice_number: invoiceNumber,
+                sale_date: invoiceDate,
+                total_amount: totalAmount,
+                notes: notes || '',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', this.editingSaleId)
+            .eq('business_id', currentBusiness.id);
+        
+        if (saleError) throw saleError;
+        
+        // 2. Handle sale items update
+        // First, get existing items to compare
+        const { data: existingItems, error: itemsError } = await supabase
+            .from('sale_items')
+            .select('*')
+            .eq('sale_id', this.editingSaleId);
+        
+        if (itemsError) throw itemsError;
+        
+        const existingItemsMap = new Map();
+        existingItems?.forEach(item => {
+            existingItemsMap.set(item.id, item);
+        });
+        
+        // Arrays to track items for update, insert, and delete
+        const itemsToUpdate = [];
+        const itemsToInsert = [];
+        const itemsToDelete = [];
+        
+        // Process current items
+        for (const item of this.invoiceItems) {
+            const totalPrice = item.quantity * item.price;
+            
+            if (item.id && existingItemsMap.has(item.id)) {
+                // Update existing item
+                itemsToUpdate.push({
+                    id: item.id,
+                    quantity: item.quantity,
+                    unit_price: item.price,
+                    total_price: totalPrice,
+                    updated_at: new Date().toISOString()
+                });
+                existingItemsMap.delete(item.id); // Remove from map to track deletions
+            } else {
+                // Insert new item
+                itemsToInsert.push({
+                    sale_id: this.editingSaleId,
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.price,
+                    total_price: totalPrice,
+                    created_at: new Date().toISOString()
+                });
+            }
+        }
+        
+        // Items remaining in existingItemsMap need to be deleted
+        existingItemsMap.forEach(item => {
+            itemsToDelete.push(item.id);
+        });
+        
+        // 3. Update product stock
+        // First, restore stock from deleted items
+        for (const deletedItemId of itemsToDelete) {
+            const itemToDelete = existingItems.find(item => item.id === deletedItemId);
+            if (itemToDelete) {
+                const { error: stockRestoreError } = await supabase
+                    .from('products')
+                    .update({
+                        current_stock: supabase.raw(`current_stock + ${itemToDelete.quantity}`),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', itemToDelete.product_id);
+                
+                if (stockRestoreError) {
+                    console.error('Error restoring stock:', stockRestoreError);
+                }
+            }
+        }
+        
+        // Then update stock for updated items
+        for (const item of itemsToUpdate) {
+            const originalItem = existingItems.find(i => i.id === item.id);
+            if (originalItem) {
+                const quantityDiff = item.quantity - originalItem.quantity;
+                if (quantityDiff !== 0) {
+                    const { error: stockUpdateError } = await supabase
+                        .from('products')
+                        .update({
+                            current_stock: supabase.raw(`current_stock - ${quantityDiff}`),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', originalItem.product_id);
+                    
+                    if (stockUpdateError) {
+                        console.error('Error updating stock:', stockUpdateError);
+                    }
+                }
+            }
+        }
+        
+        // Update stock for new items
+        for (const item of itemsToInsert) {
+            const { error: stockUpdateError } = await supabase
+                .from('products')
+                .update({
+                    current_stock: supabase.raw(`current_stock - ${item.quantity}`),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', item.product_id);
+            
+            if (stockUpdateError) {
+                console.error('Error updating stock for new item:', stockUpdateError);
+            }
+        }
+        
+        // 4. Perform database operations
+        // Update existing items
+        if (itemsToUpdate.length > 0) {
+            for (const item of itemsToUpdate) {
+                const { error: updateError } = await supabase
+                    .from('sale_items')
+                    .update({
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        total_price: item.total_price,
+                        updated_at: item.updated_at
+                    })
+                    .eq('id', item.id);
+                
+                if (updateError) {
+                    console.error('Error updating sale item:', updateError);
+                }
+            }
+        }
+        
+        // Insert new items
+        if (itemsToInsert.length > 0) {
+            const { error: insertError } = await supabase
+                .from('sale_items')
+                .insert(itemsToInsert);
+            
+            if (insertError) throw insertError;
+        }
+        
+        // Delete removed items
+        if (itemsToDelete.length > 0) {
+            const { error: deleteError } = await supabase
+                .from('sale_items')
+                .delete()
+                .in('id', itemsToDelete);
+            
+            if (deleteError) throw deleteError;
+        }
+        
+        // Show success message
+         this.resetChangeTracking();
+        showNotification('Success', `Invoice #${invoiceNumber} updated successfully!`, 'success');
+        
+        // Reset and go back to sales list
+        this.resetEditMode();
+        this.showSalesList();
+        await this.loadSalesData();
+        
+    } catch (error) {
+        console.error('Error updating invoice:', error);
+        this.showError('Failed to update invoice: ' + (error.message || 'Unknown error'));
+        
+    } finally {
+        // Restore button state
+        if (updateBtn) {
+            updateBtn.innerHTML = originalText || '<i class="fas fa-sync-alt"></i> Update Invoice';
+            updateBtn.disabled = false;
+        }
+    }
+}
+
+// Add method to handle browser back button
+setupBrowserBackButton() {
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (event) => {
+        if (this.hasUnsavedChanges && !this.isConfirmingLeave) {
+            this.showLeaveConfirmation();
+            // Push state back to prevent navigation
+            history.pushState(null, document.title, window.location.href);
+        }
+    });
+    
+    // Prevent accidental page refresh
+    window.addEventListener('beforeunload', (e) => {
+        if (this.hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            return e.returnValue;
+        }
+    });
+}
+
+resetEditMode() {
+    this.editingSaleId = null;
+    this.originalInvoiceNumber = null;
+    
+    // Reset button to "Save Invoice" and enable it
+    const saveBtn = document.getElementById('save-invoice-btn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Invoice';
+        saveBtn.onclick = () => this.saveInvoice();
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('disabled');
+    }
+    
+    // Re-enable invoice number field
+    const invoiceNumberField = document.getElementById('invoice-number');
+    if (invoiceNumberField) {
+        invoiceNumberField.readOnly = false;
+        invoiceNumberField.classList.remove('bg-light');
+        invoiceNumberField.title = "";
+    }
+    
+    // Remove edit indicator
+    const indicator = document.querySelector('.badge.bg-warning');
+    if (indicator) {
+        indicator.remove();
+    }
+    
+    // Reset page title
+    const pageTitle = document.querySelector('.invoice-header h2');
+    if (pageTitle && pageTitle.textContent.includes('Update')) {
+        pageTitle.textContent = 'Create Sale Invoice';
+    }
+    
+    // Update page title
+    document.title = 'Create New Invoice - Sales';
+}
+
+showEditModeIndicator() {
+    // Add a visual indicator that we're in edit mode
+    const invoiceHeader = document.querySelector('.invoice-header h2');
+    if (invoiceHeader) {
+        const indicator = document.createElement('span');
+        indicator.className = 'badge bg-warning ms-2';
+        indicator.textContent = 'Editing';
+        invoiceHeader.appendChild(indicator);
+    }
+    
+    // Update page title
+    document.title = `Editing Invoice ${this.originalInvoiceNumber} - Sales`;
+}
     
     async deleteSale(saleId) {
         if (!confirm('Are you sure you want to delete this sale? This action cannot be undone.')) {
@@ -2461,10 +3606,435 @@ ${currentBusiness?.email ? 'Email: ' + currentBusiness.email : ''}
         
         showNotification('Info', `Preparing to email invoice to ${sale.customerEmail}...`, 'info');
     }
+    openReportModal() {
+    this.showModal('sales-report-modal');
+    this.populateCustomerFilter();
+    this.setDefaultDateRange();
+}
+
+closeReportModal() {
+    document.getElementById('sales-report-modal').classList.add('d-none');
+}
+
+populateCustomerFilter() {
+    const customerFilter = document.getElementById('report-customer-filter');
+    if (!customerFilter) return;
     
-    showAddCustomerModal() {
-        showNotification('Info', 'Open customer management to add new customer...', 'info');
+    customerFilter.innerHTML = '<option value="">All Customers</option>' +
+        this.customers.map(customer => 
+            `<option value="${customer.id}">${customer.name}</option>`
+        ).join('');
+}
+
+setDefaultDateRange() {
+    // Set default to current month
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    document.getElementById('report-start-date').value = firstDay.toISOString().split('T')[0];
+    document.getElementById('report-end-date').value = lastDay.toISOString().split('T')[0];
+}
+
+setReportDateRange(rangeType) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    switch(rangeType) {
+        case 'today':
+            startDate = today;
+            endDate = today;
+            break;
+            
+        case 'yesterday':
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = yesterday;
+            endDate = yesterday;
+            break;
+            
+        case 'thisWeek':
+            const firstDayOfWeek = new Date(today);
+            firstDayOfWeek.setDate(today.getDate() - today.getDay());
+            startDate = firstDayOfWeek;
+            endDate = today;
+            break;
+            
+        case 'lastWeek':
+            const lastWeekStart = new Date(today);
+            lastWeekStart.setDate(today.getDate() - today.getDay() - 7);
+            const lastWeekEnd = new Date(lastWeekStart);
+            lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+            startDate = lastWeekStart;
+            endDate = lastWeekEnd;
+            break;
+            
+        case 'thisMonth':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            break;
+            
+        case 'lastMonth':
+            startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+            break;
+            
+        case 'thisQuarter':
+            const quarter = Math.floor((today.getMonth() / 3));
+            startDate = new Date(today.getFullYear(), quarter * 3, 1);
+            endDate = new Date(today.getFullYear(), (quarter * 3) + 3, 0);
+            break;
+            
+        case 'lastQuarter':
+            const lastQuarter = Math.floor((today.getMonth() / 3)) - 1;
+            startDate = new Date(today.getFullYear(), lastQuarter * 3, 1);
+            endDate = new Date(today.getFullYear(), (lastQuarter * 3) + 3, 0);
+            break;
+            
+        case 'thisYear':
+            startDate = new Date(today.getFullYear(), 0, 1);
+            endDate = new Date(today.getFullYear(), 11, 31);
+            break;
+            
+        case 'lastYear':
+            startDate = new Date(today.getFullYear() - 1, 0, 1);
+            endDate = new Date(today.getFullYear() - 1, 11, 31);
+            break;
+            
+        default:
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = today;
     }
+    
+    document.getElementById('report-start-date').value = startDate.toISOString().split('T')[0];
+    document.getElementById('report-end-date').value = endDate.toISOString().split('T')[0];
+}
+
+generateReport() {
+    // Get filter values
+    const startDate = document.getElementById('report-start-date').value;
+    const endDate = document.getElementById('report-end-date').value;
+    const customerId = document.getElementById('report-customer-filter').value;
+    const status = document.getElementById('report-status-filter').value;
+    const paymentStatus = document.getElementById('report-payment-filter').value;
+    const sortBy = document.getElementById('report-sort-by').value;
+    
+    if (!startDate || !endDate) {
+        this.showError('Please select a date range');
+        return;
+    }
+    
+    // Store filters
+    this.currentReportFilters = {
+        startDate,
+        endDate,
+        customerId,
+        status,
+        paymentStatus,
+        sortBy
+    };
+    
+    // Filter sales data
+    this.reportData = this.filterSalesForReport(this.salesData);
+    
+    // Calculate report summary
+    this.calculateReportSummary();
+    
+    // Render report results
+    this.renderReportResults();
+    
+    // Close modal and show report
+    this.closeReportModal();
+    this.showReportResults();
+}
+
+filterSalesForReport(salesData) {
+    const { startDate, endDate, customerId, status, paymentStatus, sortBy } = this.currentReportFilters;
+    
+    let filteredData = salesData.filter(sale => {
+        // Filter by date
+        const saleDate = new Date(sale.date).toISOString().split('T')[0];
+        if (saleDate < startDate || saleDate > endDate) return false;
+        
+        // Filter by customer
+        if (customerId && sale.customerId != customerId) return false;
+        
+        // Filter by status
+        if (status && sale.status !== status) return false;
+        
+        // Filter by payment status
+        if (paymentStatus && sale.payment !== paymentStatus) return false;
+        
+        return true;
+    });
+    
+    // Sort data
+    filteredData = this.sortReportData(filteredData, sortBy);
+    
+    return filteredData;
+}
+
+sortReportData(data, sortBy) {
+    return data.sort((a, b) => {
+        switch(sortBy) {
+            case 'date_desc':
+                return new Date(b.date) - new Date(a.date);
+            case 'date_asc':
+                return new Date(a.date) - new Date(b.date);
+            case 'amount_desc':
+                return b.amount - a.amount;
+            case 'amount_asc':
+                return a.amount - b.amount;
+            default:
+                return new Date(b.date) - new Date(a.date);
+        }
+    });
+}
+
+calculateReportSummary() {
+    if (this.reportData.length === 0) {
+        this.updateReportSummary(0, 0, 0, 0);
+        return;
+    }
+    
+    const totalInvoices = this.reportData.length;
+    const totalAmount = this.reportData.reduce((sum, sale) => sum + sale.amount, 0);
+    
+    // Count unique customers
+    const uniqueCustomers = new Set(this.reportData.map(sale => sale.customerId)).size;
+    
+    // Calculate total items
+    const totalItems = this.reportData.reduce((sum, sale) => sum + (sale.items || 0), 0);
+    
+    this.updateReportSummary(totalInvoices, totalAmount, uniqueCustomers, totalItems);
+}
+
+updateReportSummary(invoices, amount, customers, items) {
+    document.getElementById('report-total-invoices').textContent = invoices;
+    document.getElementById('report-total-amount').textContent = formatCurrency(amount);
+    document.getElementById('report-total-customers').textContent = customers;
+    document.getElementById('report-total-items').textContent = items;
+    document.getElementById('report-summary-amount').textContent = formatCurrency(amount);
+    
+    // Update period text
+    const { startDate, endDate } = this.currentReportFilters;
+    const start = new Date(startDate).toLocaleDateString();
+    const end = new Date(endDate).toLocaleDateString();
+    document.getElementById('report-period-text').textContent = 
+        `Showing sales from ${start} to ${end} (${this.reportData.length} records)`;
+}
+
+renderReportResults() {
+    const tableBody = document.getElementById('report-table-body');
+    
+    if (this.reportData.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="empty-state">
+                        <i class="fas fa-chart-line fa-3x mb-3 text-muted"></i>
+                        <h4>No Sales Data Found</h4>
+                        <p class="text-muted">No sales match the selected criteria</p>
+                        <button class="btn btn-outline" onclick="salesManagement.openReportModal()">
+                            <i class="fas fa-filter"></i> Change Filters
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tableBody.innerHTML = this.reportData.map(sale => `
+        <tr>
+            <td>
+                <a href="javascript:void(0)" onclick="salesManagement.showInvoicePreview(${sale.id}, '${sale.invoiceNo}')">
+                    ${sale.invoiceNo}
+                </a>
+            </td>
+            <td>${sale.displayDate}</td>
+            <td>
+                <div>${sale.customer}</div>
+                ${sale.customerEmail ? `<small class="text-muted">${sale.customerEmail}</small>` : ''}
+            </td>
+            <td>${sale.items || 0}</td>
+            <td>${formatCurrency(sale.amount)}</td>
+            <td>
+                <span class="status-badge status-${sale.status}">
+                    ${sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
+                </span>
+            </td>
+            <td>
+                <span class="payment-badge payment-${sale.payment}">
+                    ${sale.payment.charAt(0).toUpperCase() + sale.payment.slice(1)}
+                </span>
+            </td>
+        </tr>
+    `).join('');
+}
+
+showReportResults() {
+    this.showPage('sales-report-results');
+    this.isReportView = true;
+}
+
+exportReport() {
+    if (this.reportData.length === 0) {
+        this.showError('No data to export');
+        return;
+    }
+    
+    const { startDate, endDate } = this.currentReportFilters;
+    const filename = `sales_report_${startDate}_to_${endDate}.csv`;
+    
+    // Prepare CSV content
+    const headers = ['Invoice No', 'Date', 'Customer', 'Email', 'Phone', 'Items', 'Amount', 'Status', 'Payment Status'];
+    
+    const rows = this.reportData.map(sale => [
+        sale.invoiceNo,
+        sale.displayDate,
+        sale.customer,
+        sale.customerEmail || '',
+        sale.customerPhone || '',
+        sale.items || 0,
+        sale.amount,
+        sale.status,
+        sale.payment
+    ]);
+    
+    // Add summary row
+    const totalAmount = this.reportData.reduce((sum, sale) => sum + sale.amount, 0);
+    rows.push(['', '', '', '', '', 'TOTAL:', totalAmount, '', '']);
+    
+    // Convert to CSV
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showNotification('Success', 'Report exported successfully', 'success');
+}
+
+printReport() {
+    if (this.reportData.length === 0) {
+        this.showError('No data to print');
+        return;
+    }
+    
+    const printContent = this.generatePrintContent();
+    const printWindow = window.open('', '_blank');
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 500);
+}
+
+generatePrintContent() {
+    const { startDate, endDate } = this.currentReportFilters;
+    const businessName = currentBusiness?.name || 'Your Business';
+    const reportDate = new Date().toLocaleDateString();
+    const start = new Date(startDate).toLocaleDateString();
+    const end = new Date(endDate).toLocaleDateString();
+    const totalAmount = this.reportData.reduce((sum, sale) => sum + sale.amount, 0);
+    
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sales Report - ${businessName}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1, h2 { color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .summary { margin: 20px 0; padding: 15px; background-color: #f8f9fa; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+                @media print {
+                    body { margin: 0; padding: 20px; }
+                    .no-print { display: none; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>${businessName}</h1>
+                <h2>Sales Report</h2>
+                <p>Period: ${start} to ${end}</p>
+                <p>Generated on: ${reportDate}</p>
+            </div>
+            
+            <div class="summary">
+                <strong>Summary:</strong><br>
+                Total Invoices: ${this.reportData.length}<br>
+                Total Amount: ${formatCurrency(totalAmount)}<br>
+                Customers: ${new Set(this.reportData.map(sale => sale.customerId)).size}
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Payment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${this.reportData.map(sale => `
+                        <tr>
+                            <td>${sale.invoiceNo}</td>
+                            <td>${sale.displayDate}</td>
+                            <td>${sale.customer}</td>
+                            <td>${formatCurrency(sale.amount)}</td>
+                            <td>${sale.status}</td>
+                            <td>${sale.payment}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" style="text-align: right;"><strong>Total:</strong></td>
+                        <td><strong>${formatCurrency(totalAmount)}</strong></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <div class="footer">
+                <p>Report generated by Sales Management System</p>
+            </div>
+            
+            <script>
+                window.onload = function() {
+                    window.print();
+                };
+            </script>
+        </body>
+        </html>
+    `;
+}
 }
 
 // Initialize Sales Management

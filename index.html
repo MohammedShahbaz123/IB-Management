@@ -30,9 +30,6 @@
     </script>
 </head> 
 <body>
-    <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
-    <i class="fas fa-keyboard"></i>
-</button>
 
     <!-- Initial Loading Screen -->
     <div id="app-loading">
@@ -373,6 +370,9 @@
                     <div class="header-actions">
                         <button class="btn btn-primary" onclick="quickSale()"><i class="fas fa-plus"></i> Quick Sale</button>
                         <button class="btn btn-outline" onclick="exportData('overview')"><i class="fas fa-download"></i> Export</button>
+                         <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+    <i class="fas fa-keyboard"></i>
+</button>
                     </div>
                 </div>
 
@@ -520,6 +520,9 @@
     <button class="btn btn-outline" onclick="exportData('inventory')">
         <i class="fas fa-download"></i> Export
     </button>
+    <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+    <i class="fas fa-keyboard"></i>
+</button>
 </div>
                 </div>
                 
@@ -606,12 +609,12 @@
             <button class="btn btn-primary" id="create-sale-btn">
                 <i class="fas fa-plus"></i> New Sale
             </button>
-            <button class="btn btn-outline" id="sales-reports-btn">
+            <button class="btn btn-outline" id="generate-report-btn">
                 <i class="fas fa-chart-bar"></i> Reports
             </button>
-            <button class="btn btn-outline" id="export-sales-btn">
-                <i class="fas fa-download"></i> Export
-            </button>
+            <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+    <i class="fas fa-keyboard"></i>
+</button>
         </div>
     </div>
 
@@ -657,49 +660,266 @@
         </div>
         
         <!-- Sales list table -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2>Sales Records</h2>
-                <div class="header-actions">
-                    <button class="btn btn-outline btn-sm" id="refresh-sales-btn">
-                        <i class="fas fa-refresh"></i> Refresh
-                    </button>
-                    <button class="btn btn-outline btn-sm" id="bulk-print-btn">
-                        <i class="fas fa-print"></i> Bulk Print
-                    </button>
-                    <button class="btn btn-outline btn-sm" id="bulk-email-btn">
-                        <i class="fas fa-envelope"></i> Email Selected
+<div class="content-card">
+    <div class="card-header">
+        <h2>Sales Records</h2>
+        <div class="header-actions">
+            <!-- Add Search Field Here -->
+            <div class="search-container" style="display: inline-block; margin-right: 10px;">
+                <div class="input-group" style="width: 250px;">
+                        <i class="fas fa-search"></i>
+                    <input type="text" id="sales-search-input" class="form-control sales-search-focus" 
+                           placeholder="Search invoices..." 
+                           style="border-left: 0; padding-left: 0;">
+                    <button class="btn btn-outline" id="clear-search-btn" 
+                            style="border-top-right-radius: 4px; border-bottom-right-radius: 4px;">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
+            <!-- End Search Field -->
+            
+            <button class="btn btn-outline btn-sm" id="refresh-sales-btn">
+                <i class="fas fa-refresh"></i> Refresh
+            </button>
+            <button class="btn btn-outline btn-sm" id="bulk-print-btn">
+                <i class="fas fa-print"></i> Bulk Print
+            </button>
+            <button class="btn btn-outline btn-sm" id="bulk-email-btn">
+                <i class="fas fa-envelope"></i> Email Selected
+            </button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="select-all-sales">
+                    </th>
+                    <th>Invoice No</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sales-table-body">
+                <!-- Dynamic content -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="table-footer">
+        <div class="text-muted" id="sales-count-info">
+            Showing 0 sales
+        </div>
+        <div id="sales-pagination"></div>
+    </div>
+</div>
+    </div>
+</div>
+
+<!-- Add this modal for date range selection -->
+<div id="sales-report-modal" class="modal d-none">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Sales Report</h5>
+                <button type="button" class="btn-close" onclick="salesManagement.closeReportModal()"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Date Range Selection -->
+                <div class="date-range-section mb-4">
+                    <h6>Select Date Range</h6>
+                    <div class="quick-date-buttons mb-3">
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('today')">Today</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('yesterday')">Yesterday</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('thisWeek')">This Week</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('lastWeek')">Last Week</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('thisMonth')">This Month</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('lastMonth')">Last Month</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('thisQuarter')">This Quarter</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('lastQuarter')">Last Quarter</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('thisYear')">This Year</button>
+                        <button class="btn btn-outline btn-sm me-2" onclick="salesManagement.setReportDateRange('lastYear')">Last Year</button>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">From Date</label>
+                            <input type="date" id="report-start-date" class="form-control" 
+                                   max="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">To Date</label>
+                            <input type="date" id="report-end-date" class="form-control"
+                                   max="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Filters -->
+                <div class="report-filters mb-4">
+                    <h6>Additional Filters</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Customer</label>
+                            <select id="report-customer-filter" class="form-control">
+                                <option value="">All Customers</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Status</label>
+                            <select id="report-status-filter" class="form-control">
+                                <option value="">All Status</option>
+                                <option value="completed">Completed</option>
+                                <option value="pending">Pending</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Payment Status</label>
+                            <select id="report-payment-filter" class="form-control">
+                                <option value="">All Payments</option>
+                                <option value="paid">Paid</option>
+                                <option value="pending">Pending</option>
+                                <option value="partial">Partial</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Sort By</label>
+                            <select id="report-sort-by" class="form-control">
+                                <option value="date_desc">Date (Newest First)</option>
+                                <option value="date_asc">Date (Oldest First)</option>
+                                <option value="amount_desc">Amount (High to Low)</option>
+                                <option value="amount_asc">Amount (Low to High)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Actions -->
+                <div class="report-actions">
+                    <button class="btn btn-primary" onclick="salesManagement.generateReport()">
+                        <i class="fas fa-chart-bar me-2"></i>Generate Report
+                    </button>
+                    <button class="btn btn-outline ms-2" onclick="salesManagement.exportReport()">
+                        <i class="fas fa-download me-2"></i>Export as CSV
+                    </button>
+                    <button class="btn btn-outline ms-2" onclick="salesManagement.printReport()">
+                        <i class="fas fa-print me-2"></i>Print Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this report results section -->
+<div id="sales-report-results" class="page-content d-none">
+    <div class="page-header">
+        <button class="btn btn-outline back-to-sales-btn">
+            <i class="fas fa-arrow-left"></i> Back to Sales
+        </button>
+        <h2>Sales Report</h2>
+        <div class="header-actions">
+            <button class="btn btn-outline" onclick="salesManagement.openReportModal()">
+                <i class="fas fa-filter"></i> Change Filters
+            </button>
+            <button class="btn btn-primary" onclick="salesManagement.exportReport()">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <div class="report-summary-cards">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Invoices</div>
+                        <div class="stat-value" id="report-total-invoices">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Amount</div>
+                        <div class="stat-value" id="report-total-amount">₹0.00</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Customers</div>
+                        <div class="stat-value" id="report-total-customers">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Items Sold</div>
+                        <div class="stat-value" id="report-total-items">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="report-date-range mb-4">
+        <div class="alert alert-info">
+            <i class="fas fa-calendar-alt me-2"></i>
+            <span id="report-period-text">Showing sales for selected period</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
             <div class="table-responsive">
-                <table class="data-grid">
+                <table class="table">
                     <thead>
                         <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" id="select-all-sales">
-                            </th>
-                            <th>Invoice No</th>
+                            <th>Invoice #</th>
                             <th>Date</th>
                             <th>Customer</th>
+                            <th>Items</th>
                             <th>Amount</th>
                             <th>Status</th>
                             <th>Payment</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="sales-table-body">
-                        <!-- Dynamic content -->
+                    <tbody id="report-table-body">
+                        <!-- Report data will be loaded here -->
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="text-end"><strong>Report Summary:</strong></td>
+                            <td><strong id="report-summary-amount">₹0.00</strong></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
                 </table>
-            </div>
-            
-            <!-- Pagination -->
-            <div class="table-footer">
-                <div class="text-muted" id="sales-count-info">
-                    Showing 0 sales
-                </div>
-                <div id="sales-pagination"></div>
             </div>
         </div>
     </div>
@@ -709,7 +929,7 @@
 <div id="sales-invoice-page" class="page-content d-none">
     <div class="sale-invoice-header">
         <div class="header-left">
-            <button class="btn btn-outline btn-sm back-to-sales-btn">
+            <button class="btn btn-outline btn-sm back-to-sales-btn" onclick="salesManagement.hideInvoicePreview()">
                 <i class="fas fa-arrow-left"></i> Back to Sales
             </button>
             <h1>Create Sale Invoice</h1>
@@ -737,7 +957,7 @@
                         <select id="customer-select" required>
                             <option value="">Select Customer</option>
                         </select>
-                        <button type="button" class="quick-add-btn" id="add-customer-btn">
+                        <button type="button" class="quick-add-btn" id="add-customer-btn" onclick="showAddPartyModal()">
                             <i class="fas fa-plus"></i> Add New
                         </button>
                     </div>
@@ -856,20 +1076,20 @@
         <div class="action-bar bg-light border-bottom py-2 px-4">
             <div class="d-flex justify-content-end">
                 <div class="btn-group" role="group">
+                    <button class="btn btn-primary btn-sm" onclick="salesManagement.printInvoice()" title="Print Invoice">
+                        <i class="fas fa-print me-1"></i> Print
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.printThermalInvoice()" title="Thermal Print">
+                        <i class="fas fa-print me-1"></i> Thermal
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="salesManagement.downloadInvoice()" title="Download PDF">
+                        <i class="fas fa-download me-1"></i> PDF
+                    </button>
                     <button class="btn btn-outline btn-sm" onclick="salesManagement.emailInvoiceFromPreview()" title="Email Invoice">
                         <i class="fas fa-envelope me-1"></i> Email
                     </button>
                     <button class="btn btn-outline btn-sm" onclick="salesManagement.shareInvoice()" title="Share Invoice">
                         <i class="fas fa-share-alt me-1"></i> Share
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="salesManagement.downloadInvoice()" title="Download PDF">
-                        <i class="fas fa-download me-1"></i> PDF
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="salesManagement.printThermalInvoice()" title="Thermal Print">
-                        <i class="fas fa-print me-1"></i> Thermal
-                    </button>
-                    <button class="btn btn-primary btn-sm" onclick="salesManagement.printInvoice()" title="Print Invoice">
-                        <i class="fas fa-print me-1"></i> Print
                     </button>
                 </div>
             </div>
@@ -885,6 +1105,36 @@
                     </div>
                     <h4>Loading invoice preview...</h4>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="leave-invoice-modal" class="modal d-none">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Unsaved Changes</h5>
+                <button type="button" class="btn-close" onclick="salesManagement.hideLeaveConfirmation()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h4>Are you sure you want to leave?</h4>
+                    <p class="text-muted">All unsaved invoice data will be lost.</p>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    You have unsaved changes. If you leave now, all invoice data will be permanently lost.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="salesManagement.hideLeaveConfirmation()">
+                    <i class="fas fa-times me-1"></i> Stay
+                </button>
+                <button type="button" class="btn btn-danger" onclick="salesManagement.confirmLeave()">
+                    <i class="fas fa-sign-out-alt me-1"></i> Leave Anyway
+                </button>
             </div>
         </div>
     </div>
@@ -935,6 +1185,9 @@
             <button class="btn btn-outline" onclick="exportParties()">
                 <i class="fas fa-download"></i> Export
             </button>
+            <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+    <i class="fas fa-keyboard"></i>
+</button>
         </div>
     </div>
 
@@ -1477,7 +1730,7 @@
             <div class="product-sidebar">
                 <div class="content-product-card">
                     <div class="card-header">
-                        <h5 class="card-title">Products</h5>
+                        <h5 class="card-title">Products List</h5>
                     </div>
                     <div class="card-body">
                         <!-- Search Bar -->
@@ -1927,15 +2180,15 @@
                         <label for="edit-product-unit">Unit</label>
                         <select id="edit-product-unit" class="form-control">
                             <option value="QTY">Quantity</option>
-                            <option value="pcs">Pieces</option>
-                            <option value="kg">Kilograms</option>
-                            <option value="g">Grams</option>
-                            <option value="l">Liters</option>
-                            <option value="ml">Milliliters</option>
-                            <option value="m">Meters</option>
-                            <option value="cm">Centimeters</option>
-                            <option value="box">Box</option>
-                            <option value="pack">Pack</option>
+                            <option value="PCS">Pieces</option>
+                            <option value="KGS">Kilograms</option>
+                            <option value="G">Grams</option>
+                            <option value="L">Liters</option>
+                            <option value="ML">Milliliters</option>
+                            <option value="M">Meters</option>
+                            <option value="CM">Centimeters</option>
+                            <option value="BOX">Box</option>
+                            <option value="PACK">Pack</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -2294,6 +2547,8 @@
     <script src="js/sales.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/shortcuts.js"></script>
+    <script src="js/purchases.js"></script>
+    <script src="js/scroll.js"></script>
 
     <script>
         // Initialize the application

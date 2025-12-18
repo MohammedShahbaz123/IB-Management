@@ -183,6 +183,7 @@
 .product-details-container {
     width: 100%;
     padding: 0 16px;
+    overflow-y: hidden !important;
 }
 
 .product-details-grid {
@@ -367,6 +368,7 @@
     font-size: 1rem;
     display: flex;
     align-items: center;
+    
 }
 
 .section-title::before {
@@ -383,7 +385,6 @@
     background: var(--white);
     border-radius: 10px;
     box-shadow: var(--shadow);
-    padding: 1.5rem;
 }
 
 .section-divider {
@@ -394,8 +395,9 @@
 
 /* Product List Sidebar */
 .product-list-sidebar {
-    max-height: calc(100vh - 230px);
+    max-height: calc(100vh - 130px);
     overflow-y: auto;
+    margin: 0rem 0rem 0rem 1rem;
 }
 
 .product-sidebar-item {
@@ -975,6 +977,7 @@
 
 .search-box {
     position: relative;
+    margin: 0.5rem 1rem 0.5rem 1rem;
 }
 
 .search-box input {
@@ -1192,5 +1195,21 @@
     
     .export-dropdown-menu {
         width: 100%;
+    }
+}
+
+/* Add this to your existing CSS */
+#unsaved-changes-modal .modal-content {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
     }
 }

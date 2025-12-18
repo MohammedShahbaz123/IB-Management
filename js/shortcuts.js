@@ -1,4 +1,4 @@
-// shortcuts.js - Comprehensive Keyboard Shortcuts System
+// shortcuts.js - Comprehensive Keyboard Shortcuts System (Updated with Alt key combos)
 class KeyboardShortcuts {
     constructor() {
         this.shortcuts = new Map();
@@ -26,36 +26,64 @@ class KeyboardShortcuts {
     }
     
     registerDefaultShortcuts() {
-        // Global shortcuts
-        this.register('Control+/', 'Focus search bar', () => this.focusSearch());
-        this.register('Control+n', 'New item (context-aware)', () => this.createNewItem());
-        this.register('Control+s', 'Save current form', (e) => {
+        // Global shortcuts using Alt key
+        this.register('Alt+/', 'Focus search bar', () => this.focusSearch());
+        this.register('Alt+s', 'Create new sale (anywhere)', () => this.createNewSale());
+        this.register('Alt+p', 'Create new purchase (anywhere)', () => this.createNewPurchase());
+        this.register('Alt+i', 'Create new inventory item (anywhere)', () => this.createNewInventoryItem());
+        this.register('Alt+c', 'Create new party (anywhere)', () => this.createNewParty());
+        this.register('Alt+d', 'Go to dashboard', () => this.navigateTo('overview'));
+        this.register('Alt+e', 'Export current data', () => this.exportCurrentData());
+        this.register('Alt+r', 'Refresh current page', () => this.refreshCurrentPage());
+        this.register('Alt+t', 'Scroll to top', () => {
+    if (window.scrollToTop) {
+        window.scrollToTop.scrollToTop();
+    } else {
+        // Fallback
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+});
+        
+        // Form actions
+        this.register('Alt+Enter', 'Save current form/invoice', (e) => {
             e.preventDefault();
             this.saveCurrentForm();
         });
+        
+        // Navigation
         this.register('Escape', 'Close modal/cancel', () => this.closeModal());
         this.register('F1', 'Show shortcuts help', (e) => {
             e.preventDefault();
             this.showHelp();
         });
-        this.register('Control+d', 'Go to dashboard', () => this.navigateTo('overview'));
-        this.register('Control+i', 'Go to inventory', () => this.navigateTo('inventory'));
-        this.register('Control+p', 'Go to parties', () => this.navigateTo('parties'));
-        this.register('Control+Shift+s', 'Go to sales', () => this.navigateTo('sales'));
         
-        // Dashboard page number shortcuts
+        // Dashboard page number shortcuts (still use numbers)
         for (let i = 0; i <= 9; i++) {
             this.register(`${i}`, `Go to page ${this.getPageName(i)}`, () => this.navigateToPage(i));
         }
         
-        // Inventory specific
-        this.register('Control+f', 'Focus inventory search', () => this.focusInventorySearch());
-        this.register('Control+e', 'Open bulk editor', () => this.openBulkEditor());
-        this.register('Control+x', 'Export data', () => this.exportData());
+        // Quick page navigation with Alt + first letter
+        this.register('Alt+1', 'Go to Inventory', () => this.navigateTo('inventory'));
+        this.register('Alt+2', 'Go to Parties', () => this.navigateTo('parties'));
+        this.register('Alt+3', 'Go to Sales', () => this.navigateTo('sales'));
+        this.register('Alt+4', 'Go to Purchases', () => this.navigateTo('purchases'));
+        this.register('Alt+5', 'Go to Expenses', () => this.navigateTo('expenses'));
+        this.register('Alt+6', 'Go to Reports', () => this.navigateTo('reports'));
+        this.register('Alt+7', 'Go to Business', () => this.navigateTo('businesses'));
+        this.register('Alt+8', 'Go to Staff', () => this.navigateTo('staff'));
+        this.register('Alt+9', 'Go to Settings', () => this.navigateTo('settings'));
         
-        // Sales specific
-        this.register('Control+Shift+n', 'New sale invoice', () => this.createNewSale());
-        this.register('Control+r', 'Refresh sales list', () => this.refreshSales());
+        // Page-specific shortcuts
+        this.register('Alt+f', 'Focus search (context-aware)', () => this.focusContextSearch());
+        this.register('Alt+x', 'Export (context-aware)', () => this.exportCurrentData());
+        this.register('Alt+a', 'Add new (context-aware)', () => this.contextAddNew());
+        
+        // Sales invoice specific shortcuts
+        this.register('Alt+n', 'Add new item to invoice', () => this.addItemToInvoice());
+        this.register('Alt+delete', 'Clear invoice', () => this.clearInvoice());
     }
     
     register(key, description, callback) {
@@ -69,7 +97,8 @@ class KeyboardShortcuts {
             .replace('cmd', 'meta')
             .replace('command', 'meta')
             .replace('opt', 'alt')
-            .replace('option', 'alt');
+            .replace('option', 'alt')
+            .replace('delete', 'delete');
     }
     
     handleKeyDown(event) {
@@ -78,7 +107,19 @@ class KeyboardShortcuts {
             event.target.tagName === 'TEXTAREA' ||
             event.target.tagName === 'SELECT' ||
             event.target.isContentEditable) {
-            return;
+            
+            // Special handling for Enter key in forms
+            if (event.key === 'Enter' && event.altKey) {
+                // Allow Alt+Enter to save forms even in inputs
+                event.preventDefault();
+                this.saveCurrentForm();
+                return;
+            }
+            
+            // Allow Alt shortcuts even in inputs (except for certain keys)
+            if (!event.altKey || event.key === 'Tab') {
+                return;
+            }
         }
         
         // Check for modal open
@@ -102,6 +143,15 @@ class KeyboardShortcuts {
         
         const keyCombination = keys.join('+');
         
+        // Special handling for Enter key
+        if (event.key === 'Enter') {
+            if (event.altKey) {
+                event.preventDefault();
+                this.saveCurrentForm();
+                return;
+            }
+        }
+        
         // Check for exact match
         if (this.shortcuts.has(keyCombination)) {
             event.preventDefault();
@@ -111,7 +161,7 @@ class KeyboardShortcuts {
             return;
         }
         
-        // Check for number keys on dashboard
+        // Check for number keys (without Alt) on dashboard
         if (!event.ctrlKey && !event.metaKey && !event.altKey && /^[0-9]$/.test(event.key)) {
             const pageIndex = parseInt(event.key);
             this.navigateToPage(pageIndex);
@@ -124,49 +174,200 @@ class KeyboardShortcuts {
         if (searchInput) {
             searchInput.focus();
             searchInput.select();
-            showNotification('Info', 'Search focused. Start typing to search.', 'info', 2000);
         }
     }
     
-    createNewItem() {
-        const currentPage = this.getCurrentPage();
+    createNewSale() {
+        console.log('🛒 Creating new sale from anywhere...');
         
-        switch(currentPage) {
-            case 'inventory':
-                showAddProductModal();
-                break;
-            case 'parties':
-                showAddPartyModal();
-                break;
-            case 'sales':
+        // First, navigate to sales page if not already there
+        const currentPage = this.getCurrentPage();
+        if (currentPage !== 'sales') {
+            this.navigateTo('sales');
+            
+            // Wait a moment for page to load, then trigger new sale
+            setTimeout(() => {
                 if (salesManagement) {
                     salesManagement.showCreateInvoice();
+                } else {
+                    // Fallback: click the new sale button
+                    const saleBtn = document.querySelector('#create-sale-btn, [onclick*="showCreateInvoice"], [onclick*="createNewSale"]');
+                    if (saleBtn) saleBtn.click();
                 }
-                break;
-            case 'staff':
-                showAddStaffModal();
-                break;
-            default:
-                // Try to find any "Add" or "New" button
-                const addButton = document.querySelector('.btn-primary:not(.btn-outline), [onclick*="add"], [onclick*="new"], [onclick*="create"]');
-                if (addButton) {
-                    addButton.click();
-                }
+            }, 500);
+        } else {
+            // Already on sales page
+            if (salesManagement) {
+                salesManagement.showCreateInvoice();
+            }
         }
     }
     
     saveCurrentForm() {
-        // Find the currently open modal form
+        console.log('💾 Attempting to save current form...');
+        
+        // Check if we're on sales invoice page
+        const onInvoicePage = document.getElementById('sales-invoice-page') && 
+                              !document.getElementById('sales-invoice-page').classList.contains('d-none');
+        
+        if (onInvoicePage) {
+            // Save sales invoice
+            console.log('💾 Saving sales invoice...');
+            this.saveSalesInvoice();
+            return;
+        }
+        
+        // Check if any modal is open
         const modal = document.querySelector('.modal:not(.d-none)');
         if (modal) {
-            const form = modal.querySelector('form');
-            if (form) {
-                const submitButton = form.querySelector('button[type="submit"]');
-                if (submitButton && !submitButton.disabled) {
-                    submitButton.click();
-                    showNotification('Info', 'Saving form...', 'info', 1000);
+            console.log('💾 Saving modal form...');
+            this.saveModalForm(modal);
+            return;
+        }
+        
+        // Check for any visible form
+        const visibleForm = document.querySelector('form:not([style*="display: none"]):not(.d-none)');
+        if (visibleForm) {
+            console.log('💾 Saving visible form...');
+            this.submitForm(visibleForm);
+            return;
+        }
+        
+        console.log('⚠️ No form found to save');
+    }
+    
+    saveSalesInvoice() {
+        // Try to find the save invoice button
+        const saveBtn = document.getElementById('save-invoice-btn');
+        if (saveBtn && !saveBtn.disabled) {
+            console.log('✅ Found save invoice button, clicking...');
+            saveBtn.click();
+        } else if (salesManagement && typeof salesManagement.saveInvoice === 'function') {
+            console.log('✅ Using salesManagement.saveInvoice()');
+            salesManagement.saveInvoice();
+        } else {
+            console.log('❌ Could not find save invoice method');
+        }
+    }
+    
+    saveModalForm(modal) {
+        const form = modal.querySelector('form');
+        if (form) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton && !submitButton.disabled) {
+                console.log('✅ Found submit button in modal, clicking...');
+                submitButton.click();
+            } else {
+                // Try to trigger submit event
+                console.log('✅ Triggering form submit event...');
+                const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                form.dispatchEvent(submitEvent);
+            }
+        } else {
+            console.log('❌ No form found in modal');
+        }
+    }
+    
+    submitForm(form) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton && !submitButton.disabled) {
+            console.log('✅ Clicking submit button...');
+            submitButton.click();
+        } else {
+            // Try to submit the form programmatically
+            console.log('✅ Submitting form programmatically...');
+            if (typeof form.submit === 'function') {
+                form.submit();
+            } else {
+                console.log('❌ Form cannot be submitted');
+            }
+        }
+    }
+    
+    addItemToInvoice() {
+        // Check if we're on sales invoice page
+        const onInvoicePage = document.getElementById('sales-invoice-page') && 
+                              !document.getElementById('sales-invoice-page').classList.contains('d-none');
+        
+        if (onInvoicePage) {
+            const addItemBtn = document.getElementById('add-item-btn');
+            if (addItemBtn && !addItemBtn.disabled) {
+                console.log('➕ Adding item to invoice...');
+                addItemBtn.click();
+            } else if (salesManagement && typeof salesManagement.addItemToInvoice === 'function') {
+                salesManagement.addItemToInvoice();
+            }
+        }
+    }
+    
+    clearInvoice() {
+        // Check if we're on sales invoice page
+        const onInvoicePage = document.getElementById('sales-invoice-page') && 
+                              !document.getElementById('sales-invoice-page').classList.contains('d-none');
+        
+        if (onInvoicePage) {
+            const clearBtn = document.getElementById('clear-invoice-btn');
+            if (clearBtn) {
+                if (confirm('Are you sure you want to clear the invoice?')) {
+                    console.log('🗑️ Clearing invoice...');
+                    clearBtn.click();
+                }
+            } else if (salesManagement && typeof salesManagement.clearInvoice === 'function') {
+                if (confirm('Are you sure you want to clear the invoice?')) {
+                    salesManagement.clearInvoice();
                 }
             }
+        }
+    }
+    
+    createNewPurchase() {
+        console.log('📦 Creating new purchase from anywhere...');
+        
+        // Navigate to purchases page
+        this.navigateTo('purchases');
+        
+        // Note: You'll need to implement purchase creation in purchases.js
+        setTimeout(() => {
+            const purchaseBtn = document.querySelector('#create-purchase-btn, [onclick*="createPurchase"], [onclick*="newPurchase"]');
+            if (purchaseBtn) {
+                purchaseBtn.click();
+            }
+        }, 500);
+    }
+    
+    createNewInventoryItem() {
+        console.log('📦 Creating new inventory item from anywhere...');
+        
+        // First, navigate to inventory page if not already there
+        const currentPage = this.getCurrentPage();
+        if (currentPage !== 'inventory') {
+            this.navigateTo('inventory');
+            
+            // Wait a moment for page to load, then trigger new product
+            setTimeout(() => {
+                showAddProductModal();
+            }, 500);
+        } else {
+            // Already on inventory page
+            showAddProductModal();
+        }
+    }
+    
+    createNewParty() {
+        console.log('👥 Creating new party from anywhere...');
+        
+        // First, navigate to parties page if not already there
+        const currentPage = this.getCurrentPage();
+        if (currentPage !== 'parties') {
+            this.navigateTo('parties');
+            
+            // Wait a moment for page to load, then trigger new party
+            setTimeout(() => {
+                showAddPartyModal();
+            }, 500);
+        } else {
+            // Already on parties page
+            showAddPartyModal();
         }
     }
     
@@ -194,7 +395,6 @@ class KeyboardShortcuts {
         const sidebarLink = document.querySelector(`.sidebar-menu a[data-page="${page}"]`);
         if (sidebarLink) {
             sidebarLink.click();
-            showNotification('Info', `Navigated to ${this.getPageName(page)}`, 'info', 1500);
         }
     }
     
@@ -244,23 +444,34 @@ class KeyboardShortcuts {
         return 'overview';
     }
     
-    focusInventorySearch() {
-        if (this.getCurrentPage() === 'inventory') {
-            const searchInput = document.getElementById('inventory-search');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
+    focusContextSearch() {
+        const currentPage = this.getCurrentPage();
+        let searchInput;
+        
+        switch(currentPage) {
+            case 'inventory':
+                searchInput = document.getElementById('inventory-search');
+                break;
+            case 'parties':
+                searchInput = document.getElementById('party-search');
+                break;
+            case 'sales':
+                searchInput = document.querySelector('#sales-search, [placeholder*="Search sales"]');
+                break;
+            case 'staff':
+                searchInput = document.getElementById('staff-search');
+                break;
+            default:
+                searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]');
+        }
+        
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
         }
     }
     
-    openBulkEditor() {
-        if (this.getCurrentPage() === 'inventory') {
-            showBulkEditor();
-        }
-    }
-    
-    exportData() {
+    exportCurrentData() {
         const currentPage = this.getCurrentPage();
         
         switch(currentPage) {
@@ -272,22 +483,89 @@ class KeyboardShortcuts {
                 break;
             case 'sales':
                 const exportBtn = document.getElementById('export-sales-btn');
-                if (exportBtn) exportBtn.click();
+                if (exportBtn) {
+                    exportBtn.click();
+                }
                 break;
+            default:
+                // Try to find any export button
+                const exportButton = document.querySelector('[onclick*="export"], [onclick*="Export"]');
+                if (exportButton) {
+                    exportButton.click();
+                }
         }
     }
     
-    createNewSale() {
-        if (this.getCurrentPage() === 'sales' && salesManagement) {
-            salesManagement.showCreateInvoice();
+    refreshCurrentPage() {
+        const currentPage = this.getCurrentPage();
+        
+        switch(currentPage) {
+            case 'inventory':
+                refreshInventory();
+                break;
+            case 'parties':
+                loadParties();
+                break;
+            case 'sales':
+                if (salesManagement) {
+                    salesManagement.loadSalesData();
+                }
+                break;
+            default:
+                // Try to find any refresh button
+                const refreshBtn = document.querySelector('[onclick*="refresh"], [onclick*="Refresh"], [onclick*="load"]');
+                if (refreshBtn) {
+                    refreshBtn.click();
+                }
         }
     }
     
-    refreshSales() {
-        if (this.getCurrentPage() === 'sales' && salesManagement) {
-            salesManagement.loadSalesData();
-            showNotification('Info', 'Refreshing sales data...', 'info', 1500);
+    contextAddNew() {
+        const currentPage = this.getCurrentPage();
+        
+        switch(currentPage) {
+            case 'inventory':
+                showAddProductModal();
+                break;
+            case 'parties':
+                showAddPartyModal();
+                break;
+            case 'sales':
+                if (salesManagement) {
+                    salesManagement.showCreateInvoice();
+                }
+                break;
+            case 'staff':
+                showAddStaffModal();
+                break;
+            case 'businesses':
+                showCreateBusinessModal();
+                break;
+            default:
+                // Try to find any "Add" or "New" button
+                const addButton = document.querySelector('.btn-primary:not(.btn-outline), [onclick*="add"], [onclick*="new"], [onclick*="create"]');
+                if (addButton) {
+                    addButton.click();
+                }
         }
+    }
+    
+    showShortcutFeedback(message) {
+        // Create or update feedback element
+        let feedback = document.getElementById('shortcut-feedback');
+        if (!feedback) {
+            feedback = document.createElement('div');
+            feedback.id = 'shortcut-feedback';
+        }
+        
+        feedback.textContent = `⌨️ ${message}`;
+        feedback.style.opacity = '1';
+        
+        // Auto-hide after 2 seconds
+        setTimeout(() => {
+            feedback.style.opacity = '0';
+            feedback.style.transform = 'translateY(-10px)';
+        }, 2000);
     }
     
     createHelpModal() {
@@ -303,92 +581,108 @@ class KeyboardShortcuts {
                     <div class="modal-body">
                         <div class="shortcuts-grid">
                             <div class="shortcuts-section">
-                                <h4><i class="fas fa-globe"></i> Global Shortcuts</h4>
+                                <h4><i class="fas fa-bolt"></i> Quick Actions (Anywhere)</h4>
                                 <div class="shortcuts-list">
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + /</span>
-                                        <span class="shortcut-description">Focus search bar</span>
+                                        <span class="shortcut-key">Alt + S</span>
+                                        <span class="shortcut-description">Create New Sale</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + N</span>
-                                        <span class="shortcut-description">Create new item</span>
+                                        <span class="shortcut-key">Alt + P</span>
+                                        <span class="shortcut-description">Create New Purchase</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + S</span>
-                                        <span class="shortcut-description">Save current form</span>
+                                        <span class="shortcut-key">Alt + I</span>
+                                        <span class="shortcut-description">Create New Inventory Item</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">Esc</span>
-                                        <span class="shortcut-description">Close modal/cancel</span>
+                                        <span class="shortcut-key">Alt + C</span>
+                                        <span class="shortcut-description">Create New Party</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">F1</span>
-                                        <span class="shortcut-description">Show this help</span>
+                                        <span class="shortcut-key">Alt + A</span>
+                                        <span class="shortcut-description">Add New (Context-aware)</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + F</span>
+                                        <span class="shortcut-description">Focus Search</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + E</span>
+                                        <span class="shortcut-description">Export Current Data</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + R</span>
+                                        <span class="shortcut-description">Refresh Current Page</span>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="shortcuts-section">
-                                <h4><i class="fas fa-tachometer-alt"></i> Dashboard Navigation</h4>
+                                <h4><i class="fas fa-file-invoice-dollar"></i> Sales Invoice Shortcuts</h4>
                                 <div class="shortcuts-list">
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + D</span>
-                                        <span class="shortcut-description">Go to Dashboard</span>
+                                        <span class="shortcut-key">Alt + Enter</span>
+                                        <span class="shortcut-description">Save Invoice</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + I</span>
+                                        <span class="shortcut-key">Alt + N</span>
+                                        <span class="shortcut-description">Add Item to Invoice</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + Delete</span>
+                                        <span class="shortcut-description">Clear Invoice</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="shortcuts-section">
+                                <h4><i class="fas fa-compass"></i> Quick Navigation</h4>
+                                <div class="shortcuts-list">
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + 1</span>
                                         <span class="shortcut-description">Go to Inventory</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + P</span>
+                                        <span class="shortcut-key">Alt + 2</span>
                                         <span class="shortcut-description">Go to Parties</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + Shift + S</span>
+                                        <span class="shortcut-key">Alt + 3</span>
                                         <span class="shortcut-description">Go to Sales</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">0-9</span>
-                                        <span class="shortcut-description">Quick page numbers</span>
+                                        <span class="shortcut-key">Alt + 4</span>
+                                        <span class="shortcut-description">Go to Purchases</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">Alt + 5</span>
+                                        <span class="shortcut-description">Go to Expenses</span>
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <span class="shortcut-key">0-9 Keys</span>
+                                        <span class="shortcut-description">Dashboard quick pages</span>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="shortcuts-section">
-                                <h4><i class="fas fa-boxes"></i> Inventory Shortcuts</h4>
+                                <h4><i class="fas fa-globe"></i> Global Shortcuts</h4>
                                 <div class="shortcuts-list">
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + F</span>
-                                        <span class="shortcut-description">Focus search</span>
+                                        <span class="shortcut-key">Esc</span>
+                                        <span class="shortcut-description">Close Modal/Cancel</span>
                                     </div>
                                     <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + E</span>
-                                        <span class="shortcut-description">Open bulk editor</span>
-                                    </div>
-                                    <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + X</span>
-                                        <span class="shortcut-description">Export inventory</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="shortcuts-section">
-                                <h4><i class="fas fa-shopping-cart"></i> Sales Shortcuts</h4>
-                                <div class="shortcuts-list">
-                                    <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + Shift + N</span>
-                                        <span class="shortcut-description">New sale invoice</span>
-                                    </div>
-                                    <div class="shortcut-item">
-                                        <span class="shortcut-key">${this.isMac ? '⌘' : 'Ctrl'} + R</span>
-                                        <span class="shortcut-description">Refresh sales list</span>
+                                        <span class="shortcut-key">F1</span>
+                                        <span class="shortcut-description">Show This Help</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="shortcuts-footer">
-                            <p><i class="fas fa-info-circle"></i> <strong>Tip:</strong> Shortcuts are context-aware and change based on the current page.</p>
+                            <p><i class="fas fa-info-circle"></i> <strong>Tip:</strong> Most shortcuts use the <kbd>Alt</kbd> key to avoid browser conflicts.</p>
                             <p><small>Press <kbd>Esc</kbd> to close this help dialog.</small></p>
                         </div>
                     </div>
@@ -438,18 +732,26 @@ class KeyboardShortcuts {
                 background: white;
                 border-radius: 6px;
                 border: 1px solid #dee2e6;
+                transition: all 0.2s;
+            }
+            
+            .shortcut-item:hover {
+                background: #f8f9fa;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             
             .shortcut-key {
-                background: #6c757d;
+                background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
                 color: white;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-family: monospace;
-                font-size: 12px;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
                 font-weight: bold;
                 min-width: 80px;
                 text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             
             .shortcut-description {
@@ -462,14 +764,19 @@ class KeyboardShortcuts {
             .shortcuts-footer {
                 margin-top: 20px;
                 padding: 15px;
-                background: #e7f3ff;
-                border-radius: 6px;
-                border-left: 4px solid #007bff;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 8px;
             }
             
             .shortcuts-footer p {
                 margin: 5px 0;
-                color: #495057;
+            }
+            
+            .shortcuts-footer kbd {
+                background-color: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
             }
             
             kbd {
@@ -527,6 +834,79 @@ window.showKeyboardHelp = function() {
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         initializeKeyboardShortcuts();
+        
+        // Add cheat sheet button
+        const cheatSheetBtn = document.createElement('button');
+        cheatSheetBtn.className = 'cheat-sheet-btn';
+        cheatSheetBtn.innerHTML = '<i class="fas fa-keyboard"></i>';
+        cheatSheetBtn.title = 'Keyboard Shortcuts (F1)';
+        cheatSheetBtn.onclick = () => keyboardShortcuts.showHelp();
+        
+        // Add styles for cheat sheet button
+        const style = document.createElement('style');
+        style.textContent = `
+            .cheat-sheet-btn {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                transition: all 0.3s ease;
+                font-size: 15px;
+            }
+            
+            .cheat-sheet-btn:hover {
+                transform: scale(1.1) rotate(5deg);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            }
+            
+            .cheat-sheet-btn:active {
+                transform: scale(0.95);
+            }
+            
+            /* Shortcut indicators on buttons */
+            .btn-with-shortcut {
+                position: relative;
+                padding-right: 50px !important;
+            }
+            
+            .btn-shortcut {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: rgba(0,0,0,0.1);
+                color: #6c757d;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                pointer-events: none;
+                border: 1px solid #dee2e6;
+                font-family: 'Courier New', monospace;
+            }
+            
+            .btn-primary .btn-shortcut {
+                background: rgba(255,255,255,0.2);
+                color: rgba(255,255,255,0.9);
+                border: 1px solid rgba(255,255,255,0.3);
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(cheatSheetBtn);
+        
+        // Add shortcut indicators to important buttons
+        setTimeout(() => {
+            addShortcutIndicators();
+        }, 1000);
+        
     }, 1000); // Wait for other systems to initialize
 });
 

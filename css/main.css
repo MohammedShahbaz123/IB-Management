@@ -626,10 +626,6 @@ body > div {
 
 /* Cheat sheet button */
 .cheat-sheet-btn {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
     background: #6c757d;
     color: white;
     border: none;
