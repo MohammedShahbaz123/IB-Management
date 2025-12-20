@@ -1,5 +1,11 @@
-// Enhanced Utils with Business Isolation Support
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Just check if supabase is initialized
+if (!window.supabase || !window.supabase.__initialized) {
+    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabase.__initialized = true;
+}
+
+// Use window.supabase or create a local reference WITHOUT const
+var supabase = window.supabase;
 
 // Add these constants at the top of your file if not already present
 const STATE_KEYS = {
@@ -545,29 +551,4 @@ async function loadBusinessIntelligence() {
     }
 }
 
-// Make functions globally available
-window.initializePartiesSystem = initializePartiesSystem;
-window.showAddPartyModal = showAddPartyModal;
-window.hideAddPartyModal = hideAddPartyModal;
-window.showEditPartyModal = showEditPartyModal;
-window.hideEditPartyModal = hideEditPartyModal;
-window.showPartyDetailsModal = showPartyDetailsModal;
-window.hidePartyDetailsModal = hidePartyDetailsModal;
-window.editPartyFromDetails = editPartyFromDetails;
-window.clearPartyFilters = clearPartyFilters;
-window.togglePartyView = togglePartyView;
-window.toggleSelectAllParties = toggleSelectAllParties;
-window.togglePartySelection = togglePartySelection;
-window.clearPartySelection = clearPartySelection;
-window.changePartyPage = changePartyPage;
-window.showPartyGroup = showPartyGroup;
-window.deleteSelectedParties = deleteSelectedParties;
-window.sendBulkEmail = sendBulkEmail;
-window.exportSelectedParties = exportSelectedParties;
-window.exportParties = exportParties;
-window.quickTransaction = quickTransaction;
-window.editParty = editParty;
-window.showPartyDetails = showPartyDetails;
-window.showContactAdmin = showContactAdmin;
 
-console.log('✅ Parties management system loaded successfully');

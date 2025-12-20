@@ -1140,3 +1140,30 @@ function setupPartiesShortcuts() {
         }
     });
 }
+
+// Make functions globally available
+window.initializePartiesSystem = initializePartiesSystem;
+window.showAddPartyModal = showAddPartyModal;
+window.hideAddPartyModal = hideAddPartyModal;
+window.showEditPartyModal = showEditPartyModal;
+window.hideEditPartyModal = hideEditPartyModal;
+window.showPartyDetailsModal = showPartyDetailsModal;
+window.hidePartyDetailsModal = hidePartyDetailsModal;
+window.editPartyFromDetails = editPartyFromDetails;
+window.clearPartyFilters = clearPartyFilters;
+window.togglePartyView = togglePartyView;
+window.toggleSelectAllParties = toggleSelectAllParties;
+window.togglePartySelection = togglePartySelection;
+window.clearPartySelection = clearPartySelection;
+window.changePartyPage = changePartyPage;
+window.showPartyGroup = showPartyGroup;
+window.deleteSelectedParties = deleteSelectedParties;
+window.sendBulkEmail = sendBulkEmail;
+window.exportSelectedParties = exportSelectedParties;
+window.exportParties = exportParties;
+window.quickTransaction = quickTransaction;
+window.editParty = editParty;
+window.showPartyDetails = showPartyDetails;
+window.showContactAdmin = showContactAdmin;
+
+console.log('✅ Parties management system loaded successfully');

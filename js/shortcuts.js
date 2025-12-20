@@ -902,11 +902,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.body.appendChild(cheatSheetBtn);
         
-        // Add shortcut indicators to important buttons
-        setTimeout(() => {
-            addShortcutIndicators();
-        }, 1000);
-        
     }, 1000); // Wait for other systems to initialize
 });
 
