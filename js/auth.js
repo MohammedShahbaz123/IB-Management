@@ -1133,7 +1133,7 @@ function showCreateBusinessOnboarding() {
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-title">
-                    <h2>Welcome to BizManager!</h2>
+                    <h2>Welcome to IB Management</h2>
                     <p>Let's create your first business</p>
                 </div>
                 <div class="onboarding-content">
@@ -1199,7 +1199,7 @@ function showBusinessSelectionPage(userRoles) {
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-title">
-                    <h2>Welcome to BizManager!</h2>
+                    <h2>    </h2>
                     <p>Select a business to get started</p>
                 </div>
                 <div class="businesses-selection-grid">
@@ -1705,57 +1705,32 @@ function clearAllSessionData() {
     localStorage.removeItem(STATE_KEYS.ACTIVE_DASHBOARD_PAGE);
 }
 
-// Add this function to check user profile and businesses
 async function checkUserBusinessesAndProfile() {
     try {
-        console.log('🔍 Checking user profile and businesses with staff support...');
+        console.log('🔄 SIMPLE CHECK: Checking user setup...');
         
-        // First check if user is a staff member
-        const staffBusinesses = await checkStaffMembership(currentUser.email);
-        if (staffBusinesses.length > 0) {
-            console.log('👥 Staff member detected in check');
-            await handleStaffMemberPostLogin(staffBusinesses);
+        // ALWAYS show profile page for new users
+        if (isNewUser || !localStorage.getItem('profile_completed')) {
+            console.log('🆕 New user detected, showing profile form');
+            isCompletingProfile = true;
+            showProfilePage();
             return;
         }
         
-        // Regular user flow
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .single();
-        
-        const { data: businesses, error: businessesError } = await supabase
-            .from('businesses')
-            .select('*')
-            .eq('owner_id', currentUser.id)
-            .eq('is_active', true);
-        
-        const hasProfile = !profileError && profile;
-        const hasBusinesses = !businessesError && businesses && businesses.length > 0;
-        
-        console.log('📊 User status - Profile:', hasProfile, 'Businesses:', hasBusinesses);
-        
-        if (hasProfile && hasBusinesses) {
-            // User is fully set up
-            localStorage.setItem('profile_completed', 'true');
-            localStorage.setItem('user_has_businesses', 'true');
-            userBusinesses = businesses;
-            currentBusiness = businesses[0];
-            await showDashboard();
-        } else if (!hasProfile) {
-            // User needs to complete profile
-            isCompletingProfile = true;
-            showProfilePage();
-        } else if (!hasBusinesses) {
-            // User has profile but no businesses - show create business
-            isCompletingProfile = true;
+        // For returning users, check if they have businesses
+        if (!localStorage.getItem('user_has_businesses')) {
+            console.log('🏢 No businesses found, showing create business');
             showCreateBusinessOnboarding();
+            return;
         }
         
+        // User has completed setup, show dashboard
+        console.log('✅ User setup complete, showing dashboard');
+        await showDashboard();
+        
     } catch (error) {
-        console.error('❌ Error checking user status:', error);
-        // Default to profile setup if there's any error
+        console.error('❌ Error in user check:', error);
+        // Default to profile setup on any error
         isCompletingProfile = true;
         showProfilePage();
     }

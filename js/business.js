@@ -1633,7 +1633,7 @@ function debugBusinessAndRoleStatus() {
     }
     console.log('=== END DEBUG ===');
 }
-
+window.currentBusiness = currentBusiness;
 // Make it globally available
 window.debugBusinessAndRoleStatus = debugBusinessAndRoleStatus;
 

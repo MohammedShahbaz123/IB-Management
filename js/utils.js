@@ -173,6 +173,21 @@ function clearAppState() {
     sessionStorage.removeItem('currentPage');
 }
 
+// Loading states
+function showLoading(selector = 'body') {
+    const element = document.querySelector(selector);
+    if (element) {
+        element.classList.add('loading');
+    }
+}
+
+function hideLoading(selector = 'body') {
+    const element = document.querySelector(selector);
+    if (element) {
+        element.classList.remove('loading');
+    }
+}
+
 // Enhanced safeShow/safeHide with state tracking
 function safeShow(element) {
     if (element) {
@@ -484,18 +499,29 @@ function canAccessPage(page) {
 }
 
 // Utility function for formatting dates
-function formatDate(dateString) {
-    if (!dateString) return 'Never';
-    try {
-        const date = new Date(dateString);
+function formatDate(dateString, format = 'short') {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    
+    if (format === 'short') {
         return date.toLocaleDateString('en-IN', {
-            year: 'numeric',
+            day: '2-digit',
             month: 'short',
-            day: 'numeric'
+            year: 'numeric'
         });
-    } catch (error) {
-        return 'Invalid Date';
+    } else if (format === 'full') {
+        return date.toLocaleDateString('en-IN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     }
+    
+    return date.toLocaleDateString('en-IN');
 }
 
 // Add these to your utils.js if they don't exist
@@ -519,6 +545,56 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// Modal functions
+function showCustomModal(title, content, buttons = []) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('custom-modal');
+    if (existingModal) existingModal.remove();
+    
+    // Create modal HTML
+    const modalHTML = `
+        <div id="custom-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>${title}</h3>
+                    <button class="close-btn" onclick="hideCustomModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${content}
+                </div>
+                ${buttons.length > 0 ? `
+                <div class="modal-footer">
+                    ${buttons.map(btn => `
+                        <button class="btn ${btn.class}" onclick="${btn.onclick}">
+                            ${btn.text}
+                        </button>
+                    `).join('')}
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Add to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    setTimeout(() => {
+        const modal = document.getElementById('custom-modal');
+        if (modal) {
+            modal.classList.remove('d-none');
+        }
+    }, 10);
+}
+
+function hideCustomModal() {
+    const modal = document.getElementById('custom-modal');
+    if (modal) {
+        modal.classList.add('d-none');
+        setTimeout(() => modal.remove(), 300);
+    }
 }
 
 // Make functions globally available

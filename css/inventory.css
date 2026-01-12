@@ -1213,3 +1213,101 @@
         transform: scale(1);
     }
 }
+
+/* Universal Action Dropdown Styles for all pages */
+.action-dropdown {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.action-dots {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-size: 1.2rem;
+}
+
+.action-dots:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.action-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    min-width: 160px;
+    z-index: 1000;
+    display: none;
+    padding: 5px 0;
+    margin-top: 5px;
+}
+
+.action-dropdown-menu.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+.action-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    text-align: left;
+    color: #495057;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.action-dropdown-item:hover {
+    background: #f8f9fa;
+    color: #212529;
+}
+
+.action-dropdown-item i {
+    width: 16px;
+    text-align: center;
+}
+
+.action-dropdown-item.text-danger {
+    color: #dc3545;
+}
+
+.action-dropdown-item.text-danger:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Ensure clickable rows still work with dropdown */
+.clickable-row {
+    cursor: pointer;
+}
+
+.clickable-row:hover {
+    background-color: #f8f9fa;
+}

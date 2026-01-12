@@ -322,17 +322,57 @@ function displayPartiesTable(parties, container) {
                 ${party.last_transaction_date ? formatDate(party.last_transaction_date) : 'Never'}
             </td>
             <td>
-                <div class="action-buttons">
-                    <button class="btn btn-outline btn-sm" onclick="showPartyDetails('${party.id}')">
-                        <i class="fas fa-eye"></i>
+                <div class="action-dropdown">
+                    <button class="action-dots" onclick="event.stopPropagation(); togglePartiesActionDropdown('${party.id}')">
+                        <i class="fas fa-ellipsis-v"></i>
                     </button>
-                    <button class="btn btn-outline btn-sm" onclick="editParty('${party.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    <div class="action-dropdown-menu" id="parties-action-dropdown-${party.id}">
+                        <button class="action-dropdown-item" onclick="event.stopPropagation(); editParty('${party.id}')">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="action-dropdown-item text-danger" onclick="event.stopPropagation(); deleteParty('${party.id}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                        <button class="action-dropdown-item" onclick="event.stopPropagation(); showPartyDetails('${party.id}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                    </div>
                 </div>
             </td>
         </tr>
     `).join('');
+}
+
+function togglePartiesActionDropdown(partyId) {
+    document.querySelectorAll('.action-dropdown-menu.show').forEach(dropdown => {
+        if (!dropdown.id.includes(`parties-action-dropdown-${partyId}`)) {
+            dropdown.classList.remove('show');
+        }
+    });
+    
+    const dropdown = document.getElementById(`parties-action-dropdown-${partyId}`);
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
+
+// Add event listeners:
+function setupPartiesActionDropdownListeners() {
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.action-dropdown') && 
+            !event.target.closest('.action-dropdown-menu')) {
+            document.querySelectorAll('.action-dropdown-menu.show').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        }
+    });
+    
+    document.addEventListener('click', function(event) {
+        if (event.target.closest('.action-dropdown-item') || 
+            event.target.closest('.action-dots')) {
+            event.stopPropagation();
+        }
+    });
 }
 
 // Get balance class for styling

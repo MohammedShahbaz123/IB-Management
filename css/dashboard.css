@@ -313,6 +313,43 @@ table th {
     font-size: 0.8rem;
 }
 
+ #recent-activity table {
+        font-size: 0.875rem;
+    }
+    
+    #recent-activity table th {
+        font-weight: 600;
+        color: #495057;
+        border-top: none;
+        background-color: #f8f9fa;
+    }
+    
+    #recent-activity table td {
+        vertical-align: middle;
+        padding: 0.75rem;
+    }
+    
+    .activity-alert-row {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+    }
+    
+    .activity-alert-row:hover {
+        background-color: rgba(255, 193, 7, 0.2) !important;
+    }
+    
+    .table-warning {
+        --bs-table-bg: rgba(255, 193, 7, 0.1);
+        --bs-table-border-color: rgba(255, 193, 7, 0.2);
+    }
+    
+    .table-warning:hover {
+        --bs-table-bg: rgba(255, 193, 7, 0.2);
+    }
+    
+    .placeholder-glow .placeholder {
+        background-color: #e9ecef;
+    }
+
 /* Form rows for modals */
 .form-row {
     display: flex;
@@ -432,3 +469,55 @@ table th {
 .loading-pulse {
     animation: pulse 1.5s ease-in-out infinite;
 }
+
+ /* Activities Modal Styles */
+    #all-activities-modal .modal-content {
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #all-activities-modal .modal-body {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #all-activities-list tr {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    #all-activities-list tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    #all-activities-list .table-warning:hover {
+        background-color: rgba(255, 193, 7, 0.2);
+    }
+    
+    .activities-footer {
+        border-top: 1px solid #dee2e6;
+        padding-top: 10px;
+    }
+    
+    /* Tooltip styles for activity rows */
+    [title] {
+        cursor: help;
+    }
+    
+    /* Responsive table in modal */
+    @media (max-width: 768px) {
+        #all-activities-modal .modal-content {
+            width: 95%;
+            margin: 10px auto;
+        }
+        
+        #all-activities-list td, #all-activities-list th {
+            padding: 8px 4px;
+            font-size: 0.8rem;
+        }
+    }
+
+    

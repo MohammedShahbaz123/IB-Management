@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BizManager - Inventory & Billing System</title>
+    <title>IB Manager - Inventory & Billing System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -20,8 +20,11 @@
     <link rel="stylesheet" href="css/staff.css">
     <link rel="stylesheet" href="css/inventory.css">
     <link rel="stylesheet" href="css/sales.css">
+    <link rel="stylesheet" href="css/purchase.css">
     <link rel="stylesheet" href="css/notifications.css">
     <link rel="stylesheet" href="css/parties.css">
+    <link rel="stylesheet" href="css/expenses.css">
+    <link rel="stylesheet" href="css/reports.css">
     
     <script>
         // Add your Supabase credentials here
@@ -34,7 +37,7 @@
     <!-- Initial Loading Screen -->
     <div id="app-loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Loading BizManager...</div>
+        <div class="loading-text">Loading IB Manager...</div>
     </div>
 
     <!-- Notification System -->
@@ -46,7 +49,7 @@
             <div class="container">
                 <nav class="navbar">
                     <a href="#" class="logo">
-                        <i class="fas fa-cubes"></i> BizManager
+                        <i class="fas fa-cubes"></i> IB Manager
                     </a>
                     <ul class="nav-links">
                         <li><a href="#features">Features</a></li>
@@ -468,8 +471,8 @@
                         <h2>Performance Analytics</h2>
                         <div class="header-actions">
                             <select id="chart-period" onchange="loadCharts()" class="form-control">
-                                <option value="7">Last 7 Days</option>
-                                <option value="30" selected>Last 30 Days</option>
+                                <option value="7" selected>Last 7 Days</option>
+                                <option value="30">Last 30 Days</option>
                                 <option value="90">Last 90 Days</option>
                             </select>
                         </div>
@@ -710,14 +713,6 @@
                 <!-- Dynamic content -->
             </tbody>
         </table>
-    </div>
-    
-    <!-- Pagination -->
-    <div class="table-footer">
-        <div class="text-muted" id="sales-count-info">
-            Showing 0 sales
-        </div>
-        <div id="sales-pagination"></div>
     </div>
 </div>
     </div>
@@ -1014,6 +1009,7 @@
                     <thead>
                         <tr>
                             <th>Item</th>
+                             <th>Description</th>
                             <th>Quantity</th>
                             <th>Price</th>
                             <th>Subtotal</th>
@@ -1582,17 +1578,864 @@
     </div>
 </div>
 
-            <div id="purchases-page" class="page-content d-none">
-                <!-- Purchases management content -->
-            </div>
+            <!-- Purchases Management Page -->
+<div id="purchases-page" class="page-content d-none">
+    <div class="dashboard-header">
+        <div class="dashboard-title">
+            <h1>Purchases Management</h1>
+            <p>Manage, and create purchase orders</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="create-purchase-btn">
+                <i class="fas fa-plus"></i> New Purchase
+            </button>
+            <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+                <i class="fas fa-keyboard"></i>
+            </button>
+        </div>
+    </div>
 
-            <div id="expenses-page" class="page-content d-none">
-                <!-- Expenses management content -->
+    <!-- Purchases Dashboard Content -->
+    <div id="purchases-dashboard-content">
+        <div class="stats-grid">
+            <div class="stat-card" data-filter="all">
+                <div class="stat-icon" style="background: #f093fb;">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-purchases-count">0</h3>
+                    <p>Total Purchases</p>
+                </div>
             </div>
+            <div class="stat-card" data-filter="ordered">
+                <div class="stat-icon" style="background: #f5576c;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-purchases-amount">$0</h3>
+                    <p>Purchases Amount</p>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="pending">
+                <div class="stat-icon" style="background: #f39c12;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="pending-purchases">0</h3>
+                    <p>Pending Orders</p>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="today">
+                <div class="stat-icon" style="background: #3498db;">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="avg-purchase-value">$0</h3>
+                    <p>Avg Purchase Value</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Purchases list table -->
+        <div class="content-card">
+            <div class="card-header">
+                <h2>Purchase Orders</h2>
+                <div class="header-actions">
+                    <!-- Search Field -->
+                    <div class="search-container" style="display: inline-block; margin-right: 10px;">
+                        <div class="input-group" style="width: 250px;">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="purchases-search-input" class="form-control" 
+                                   placeholder="Search orders..." 
+                                   style="border-left: 0; padding-left: 0;">
+                            <button class="btn btn-outline" id="clear-purchase-search-btn" 
+                                    style="border-top-right-radius: 4px; border-bottom-right-radius: 4px;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-outline btn-sm" id="refresh-purchases-btn">
+                        <i class="fas fa-refresh"></i> Refresh
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="bulk-print-purchase-btn">
+                        <i class="fas fa-print"></i> Bulk Print
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="bulk-email-purchase-btn">
+                        <i class="fas fa-envelope"></i> Email Selected
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-purchases">
+                            </th>
+                            <th>Order No</th>
+                            <th>Date</th>
+                            <th>Supplier</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchases-table-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
-            <div id="reports-page" class="page-content d-none">
-                <!-- Reports content -->
+<!-- Purchase Order Page -->
+<div id="purchases-order-page" class="page-content d-none">
+    <div class="purchase-header">
+        <div class="header-left">
+            <button class="btn btn-outline btn-sm back-to-purchases-btn">
+                <i class="fas fa-arrow-left"></i> Back to Purchases
+            </button>
+            <h2>Create Purchase Order</h2>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-outline" id="clear-purchase-btn">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+            <button class="btn btn-primary" id="save-purchase-btn">
+                <i class="fas fa-save"></i> Save Purchase Order
+            </button>
+        </div>
+    </div>
+    
+    <div class="purchase-order-container">
+        <div class="order-meta-section">
+            <div class="meta-row">
+                <div class="meta-group">
+                    <label for="purchase-date">Order Date *</label>
+                    <input type="date" id="purchase-date" required>
+                </div>
+                <div class="meta-group">
+                    <label for="supplier-select">Supplier *</label>
+                    <div class="supplier-select-wrapper">
+                        <select id="supplier-select" required>
+                            <option value="">Select Supplier</option>
+                        </select>
+                        <button type="button" class="quick-add-btn" id="add-supplier-btn">
+                            <i class="fas fa-plus"></i> Add New
+                        </button>
+                    </div>
+                </div>
+                <div class="meta-group">
+                    <label for="purchase-order-number">Order Number</label>
+                    <input type="text" id="purchase-order-number" readonly value="PO-001">
+                </div>
             </div>
+            
+            <div class="meta-row">
+                <div class="meta-group">
+                    <label for="expected-delivery-date">Expected Delivery</label>
+                    <input type="date" id="expected-delivery-date">
+                </div>
+                <div class="meta-group">
+        <label for="purchase-status">Status *</label>
+        <select id="purchase-status" class="form-control" required>
+            <option value="pending">Pending</option>
+            <option value="ordered" selected>Ordered</option>
+            <option value="received">Received</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+    </div>
+    <div class="meta-group">
+        <label for="purchase-payment-status">Payment Status *</label>
+        <select id="purchase-payment-status" class="form-control" required>
+            <option value="pending" selected>Pending</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+        </select>
+    </div>
+            </div>
+        </div>
+        
+        <div class="add-items-section">
+            <h3><i class="fas fa-plus-circle"></i> Add Items</h3>
+            <div class="item-form-grid">
+                <div class="form-group">
+                    <label for="purchase-item-select">Item *</label>
+                    <input type="text" id="purchase-item-select" list="purchase-item-list" 
+                           placeholder="Search or select item">
+                    <datalist id="purchase-item-list"></datalist>
+                </div>
+                
+                <div class="form-group">
+                    <label for="purchase-item-quantity">Quantity *</label>
+                    <input type="number" id="purchase-item-quantity" min="1" step="1" 
+                           placeholder="0" value="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="purchase-item-price">Price ($) *</label>
+                    <input type="number" id="purchase-item-price" min="0.01" step="0.01" 
+                           placeholder="0.00" value="0.00">
+                </div>
+                
+                <div class="form-group">
+                    <label for="purchase-item-subtotal">Subtotal</label>
+                    <input type="text" id="purchase-item-subtotal" readonly 
+                           placeholder="0.00" class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary" id="add-purchase-item-btn">
+                        <i class="fas fa-plus"></i> Add to Order
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="items-table-section">
+            <h3><i class="fas fa-list"></i> Order Items</h3>
+            <div class="table-container">
+                <table class="purchase-items-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Subtotal</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchase-items-body">
+                        <!-- Items will be added here -->
+                    </tbody>
+                    <tfoot>
+                        <tr class="grand-total-row">
+                            <td colspan="3">Grand Total</td>
+                            <td id="purchase-grand-total-amount">$0.00</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        
+        <div class="notes-section">
+            <label for="purchase-notes">Additional Notes (Optional)</label>
+            <textarea id="purchase-notes" rows="2" 
+                      placeholder="Any additional notes for this purchase order..."></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- Purchase Preview Page -->
+<div id="purchase-preview-page" class="page-content d-none">
+    <div class="container-fluid">
+        <!-- Preview Header -->
+        <div class="preview-header bg-white border-bottom sticky-top" style="z-index: 1000;">
+            <div class="d-flex align-items-center justify-content-between py-3 px-4">
+                <!-- Left: Back Button -->
+                <div class="header-wrapper">
+                    <button class="btn btn-outline btn-sm back-to-purchases-btn" onclick="purchasesManagement.hidePurchasePreview()">
+                        <i class="fas fa-arrow-left"></i> Back to Purchases
+                    </button>
+                    <!-- Center: Title -->
+                    <div class="text-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-file-invoice-dollar text-primary me-2"></i>
+                            <span id="purchase-preview-title">Purchase Order Preview</span>
+                            <small class="text-muted" id="purchase-preview-number">#PO-00000</small>
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons Row -->
+        <div class="action-bar bg-light border-bottom py-2 px-4">
+            <div class="d-flex justify-content-end">
+                <div class="btn-group" role="group">
+    <button class="btn btn-primary btn-sm" onclick="purchasesManagement.printPurchaseOrder()" title="Print Order">
+        <i class="fas fa-print me-1"></i> Print
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="purchasesManagement.emailPurchaseOrder()" title="Email Order">
+        <i class="fas fa-envelope me-1"></i> Email
+    </button>
+    <button class="btn btn-outline btn-sm btn-success" onclick="purchasesManagement.markPurchaseAsReceived('${purchase.id}')" title="Mark as Received">
+        <i class="fas fa-check me-1"></i> Mark Received
+    </button>
+</div>
+            </div>
+        </div>
+        
+        <!-- Preview Content -->
+        <div class="preview-content py-4 px-4">
+            <div id="purchase-preview-content" class="bg-white rounded shadow-sm">
+                <!-- Purchase order content will be loaded here -->
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h4>Loading purchase order preview...</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leave Purchase Confirmation Modal -->
+<div id="leave-purchase-modal" class="modal d-none">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Unsaved Changes</h5>
+                <button type="button" class="btn-close" onclick="purchasesManagement.hideLeaveConfirmation()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h4>Are you sure you want to leave?</h4>
+                    <p class="text-muted">All unsaved purchase order data will be lost.</p>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    You have unsaved changes. If you leave now, all purchase order data will be permanently lost.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="purchasesManagement.hideLeaveConfirmation()">
+                    <i class="fas fa-times me-1"></i> Stay
+                </button>
+                <button type="button" class="btn btn-danger" onclick="purchasesManagement.confirmLeave()">
+                    <i class="fas fa-sign-out-alt me-1"></i> Leave Anyway
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+            <!-- Expenses Management Page -->
+<div id="expenses-page" class="page-content d-none">
+    <div class="expenses-header">
+        <div class="dashboard-title">
+            <h1>Expenses Management</h1>
+            <p>Track and manage business expenses</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="add-expense-btn">
+                <i class="fas fa-plus"></i> Add Expense
+            </button>
+            <button class="btn btn-outline" id="export-expenses-btn">
+                <i class="fas fa-download"></i> Export
+            </button>
+            <button class="btn btn-outline" id="print-expenses-btn">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+                <i class="fas fa-keyboard"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="expense-quick-stats">
+        <div class="expense-stat-card total">
+            <div class="expense-stat-value" id="total-expenses-amount">$0.00</div>
+            <div class="expense-stat-label">Total Expenses</div>
+        </div>
+        <div class="expense-stat-card">
+            <div class="expense-stat-value" id="monthly-expenses-amount">$0.00</div>
+            <div class="expense-stat-label">This Month</div>
+        </div>
+        <div class="expense-stat-card category">
+            <div class="expense-stat-value" id="average-expense-amount">$0.00</div>
+            <div class="expense-stat-label">Average Expense</div>
+        </div>
+        <div class="expense-stat-card vendor">
+            <div class="expense-stat-value" id="expenses-count">0</div>
+            <div class="expense-stat-label">Total Expenses</div>
+        </div>
+    </div>
+
+    <!-- Expenses Table -->
+    <div class="expenses-table-container">
+        <div class="expenses-table-header">
+            <h3>All Expenses</h3>
+            <div class="expense-search">
+                <input type="text" id="expense-search" class="form-control" placeholder="Search expenses...">
+            </div>
+        
+        <div class="filter-row">
+            <div class="filter-group">
+                <select id="expense-date-filter" class="form-control">
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="week">This Week</option>
+                    <option value="month" selected>This Month</option>
+                    <option value="quarter">This Quarter</option>
+                    <option value="year">This Year</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+            
+            <div class="filter-group" id="custom-date-range" style="display: none;">
+                <label>Custom Range</label>
+                <div class="date-inputs">
+                    <input type="date" id="start-date" class="form-control">
+                    <input type="date" id="end-date" class="form-control">
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <select id="expense-category-filter" class="form-control">
+                    <option value="all">All Categories</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <select id="expense-status-filter" class="form-control">
+                    <option value="all">All Status</option>
+                    <option value="paid">Paid</option>
+                    <option value="pending">Pending</option>
+                    <option value="overdue">Overdue</option>
+                </select>
+            </div>
+        </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="expenses-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Vendor</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Payment Method</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="expenses-table-body">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="expenses-table-footer">
+            <div class="expense-summary">
+                <strong>Total:</strong> <span id="filtered-total">$0.00</span> | 
+                <strong>Count:</strong> <span id="filtered-count">0</span> | 
+                <strong>Average:</strong> <span id="filtered-average">$0.00</span>
+            </div>
+            <div class="expenses-pagination" id="expenses-pagination">
+                <!-- Pagination will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Breakdown -->
+    <div class="expense-categories">
+        <h3>Expense Categories</h3>
+        <div id="expense-category-breakdown" class="categories-grid">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+    <!-- Add Expense Modal -->
+<div id="add-expense-modal" class="modal d-none">
+    <div class="modal-content add-expense-modal">
+        <div class="modal-header">
+            <h3 id="expense-modal-title">Add New Expense</h3>
+            <button class="close-btn" onclick="hideAddExpenseModal()">&times;</button>
+        </div>
+        <form id="add-expense-form" onsubmit="expensesManagement.saveExpense(event)">
+            <input type="hidden" id="expense-id" value="">
+            <div class="modal-body">
+                <div class="expense-form-grid">
+                    <div class="form-group">
+                        <label for="expense-description">Description *</label>
+                        <input type="text" id="expense-description" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-category">Category *</label>
+                        <select id="expense-category" class="form-control" required>
+                            <option value="">Select Category</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-amount">Amount *</label>
+                        <input type="number" id="expense-amount" class="form-control" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-date">Date *</label>
+                        <input type="date" id="expense-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-vendor">Vendor</label>
+                        <input type="text" id="expense-vendor" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-payment-method">Payment Method</label>
+                        <select id="expense-payment-method" class="form-control">
+                            <option value="">Select Method</option>
+                            <option value="cash">Cash</option>
+                            <option value="credit_card">Credit Card</option>
+                            <option value="debit_card">Debit Card</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="check">Check</option>
+                            <option value="online">Online Payment</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-status">Status *</label>
+                        <select id="expense-status" class="form-control" required>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="overdue">Overdue</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="expense-notes">Notes</label>
+                    <textarea id="expense-notes" class="form-control" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+    <label for="expense-attachment">Attachment (Optional)</label>
+    
+    <!-- Hidden file input -->
+    <input type="file" id="expense-attachment-file" class="d-none" 
+           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt" 
+           onchange="expenseManagement.handleFileSelect(event)">
+    
+    <!-- File upload area (visible) -->
+    <div class="file-upload-area" id="file-upload-area" 
+         onclick="document.getElementById('expense-attachment-file').click()">
+        <div class="file-upload-content">
+            <i class="fas fa-cloud-upload-alt fa-2x mb-2 text-primary"></i>
+            <p class="mb-1">Click to upload receipt</p>
+            <p class="text-muted small mb-0">or drag & drop here</p>
+            <p class="text-muted small">PDF, JPG, PNG, DOC (Max 5MB)</p>
+        </div>
+    </div>
+    
+    <!-- File preview (hidden by default) -->
+    <div class="file-preview d-none" id="file-preview">
+        <div class="file-preview-content">
+            <div class="file-info">
+                <i class="fas fa-file-pdf file-icon text-danger"></i>
+                <div class="file-details">
+                    <div class="file-name" id="selected-file-name">No file selected</div>
+                    <div class="file-size text-muted small" id="selected-file-size">0 KB</div>
+                </div>
+            </div>
+            <div class="file-actions">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="expenseManagement.previewFile()">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="expenseManagement.removeFile()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden field to store file URL after upload -->
+    <input type="hidden" id="expense-attachment-url" value="">
+    
+    <small class="form-text text-muted">
+        Upload receipt, invoice, or supporting document. Maximum file size: 5MB.
+    </small>
+    
+    <!-- Upload progress (hidden by default) -->
+    <div class="upload-progress d-none" id="upload-progress">
+        <div class="progress">
+            <div class="progress-bar" id="progress-bar" role="progressbar" style="width: 0%"></div>
+        </div>
+        <div class="progress-text small text-muted mt-1" id="progress-text">Uploading...</div>
+    </div>
+</div>
+                
+                <div class="expense-preview">
+                    <h4>Preview</h4>
+                    <div class="preview-details">
+                        <div class="preview-label">Description:</div>
+                        <div class="preview-value" id="preview-description">-</div>
+                        <div class="preview-label">Category:</div>
+                        <div class="preview-value" id="preview-category">-</div>
+                        <div class="preview-label">Amount:</div>
+                        <div class="preview-value" id="preview-amount">-</div>
+                        <div class="preview-label">Date:</div>
+                        <div class="preview-value" id="preview-date">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="hideAddExpenseModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Expense
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+
+<!-- Reports Management Page -->
+<div id="reports-page" class="page-content d-none">
+    <div class="reports-header">
+        <div class="dashboard-title">
+            <h1 id="report-title">Business Reports</h1>
+            <p>Generate detailed reports and insights</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="refresh-report-btn">
+                <i class="fas fa-refresh"></i> Refresh
+            </button>
+            <button class="btn btn-outline" id="print-report-btn">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button class="cheat-sheet-btn" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (F1)">
+                <i class="fas fa-keyboard"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Report Selection Grid -->
+    <div class="reports-grid">
+        <div class="report-card" data-type="sales">
+            <div class="report-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <h3>Sales Report</h3>
+            <p>Detailed sales analysis and trends</p>
+        </div>
+        
+        <div class="report-card" data-type="expenses">
+            <div class="report-icon">
+                <i class="fas fa-money-bill-wave"></i>
+            </div>
+            <h3>Expenses Report</h3>
+            <p>Track and analyze business expenses</p>
+        </div>
+        
+        <div class="report-card" data-type="inventory">
+            <div class="report-icon">
+                <i class="fas fa-boxes"></i>
+            </div>
+            <h3>Inventory Report</h3>
+            <p>Stock levels and valuation</p>
+        </div>
+        
+        <div class="report-card" data-type="profit">
+            <div class="report-icon">
+                <i class="fas fa-chart-pie"></i>
+            </div>
+            <h3>Profit & Loss</h3>
+            <p>Financial performance overview</p>
+        </div>
+        
+        <div class="report-card" data-type="cashflow">
+            <div class="report-icon">
+                <i class="fas fa-exchange-alt"></i>
+            </div>
+            <h3>Cash Flow</h3>
+            <p>Income and expenditure flow</p>
+        </div>
+        
+        <div class="report-card" data-type="customers">
+            <div class="report-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h3>Customer Report</h3>
+            <p>Customer insights and behavior</p>
+        </div>
+        
+        <div class="report-card" data-type="suppliers">
+            <div class="report-icon">
+                <i class="fas fa-truck"></i>
+            </div>
+            <h3>Supplier Report</h3>
+            <p>Supplier performance analysis</p>
+        </div>
+    </div>
+
+    <!-- Report Filters -->
+    <div class="report-filters">
+        <h2>Report Filters</h2>
+        <div class="report-filters-grid">
+            <div class="form-group">
+                <label for="report-type">Report Type</label>
+                <select id="report-type" class="form-control">
+                    <option value="sales">Sales Report</option>
+                    <option value="expenses">Expenses Report</option>
+                    <option value="inventory">Inventory Report</option>
+                    <option value="profit">Profit & Loss</option>
+                    <option value="cashflow">Cash Flow</option>
+                    <option value="customers">Customer Report</option>
+                    <option value="suppliers">Supplier Report</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="report-date-range">Date Range</label>
+                <select id="report-date-range" class="form-control">
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="week">This Week</option>
+                    <option value="month" selected>This Month</option>
+                    <option value="quarter">This Quarter</option>
+                    <option value="year">This Year</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="date-range-picker" id="custom-date-range" style="display: none;">
+            <h4>Custom Date Range</h4>
+            <div class="date-inputs">
+                <div class="form-group">
+                    <label for="start-date">From Date</label>
+                    <input type="date" id="start-date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="end-date">To Date</label>
+                    <input type="date" id="end-date" class="form-control">
+                </div>
+            </div>
+        </div>
+        
+        <div class="report-actions">
+            <button class="btn btn-primary" onclick="reportsManagement.loadReportData()">
+                <i class="fas fa-chart-bar"></i> Generate Report
+            </button>
+            <div class="export-buttons">
+                <button class="btn btn-outline" id="export-pdf-btn">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+                <button class="btn btn-outline" id="export-excel-btn">
+                    <i class="fas fa-file-excel"></i> Excel
+                </button>
+                <button class="btn btn-outline" id="export-csv-btn">
+                    <i class="fas fa-file-csv"></i> CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Results -->
+    <div class="report-results">
+        <div class="report-results-header">
+            <div>
+                <h3>Report Results</h3>
+                <div class="report-meta">
+                    <div class="report-meta-item">
+                        <i class="fas fa-calendar"></i>
+                        Period: <span id="report-period"></span>
+                    </div>
+                    <div class="report-meta-item">
+                        <i class="fas fa-clock"></i>
+                        Generated: <span id="report-generated"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Report Summary Cards -->
+        <div class="report-summary-cards">
+            <div class="summary-card positive" id="summary-total">
+                <div class="value" id="report-summary-total">$0.00</div>
+                <div class="label">Total Amount</div>
+            </div>
+            <div class="summary-card" id="summary-count">
+                <div class="value" id="report-summary-count">0</div>
+                <div class="label">Total Count</div>
+            </div>
+            <div class="summary-card" id="summary-items">
+                <div class="value" id="report-summary-items">0</div>
+                <div class="label">Total Items</div>
+            </div>
+            <div class="summary-card" id="summary-avg">
+                <div class="value" id="report-summary-avg">$0.00</div>
+                <div class="label">Average</div>
+            </div>
+        </div>
+        
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="chart-container">
+                        <h4>Sales Trend</h4>
+                        <canvas id="sales-trend-chart"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="chart-container">
+                        <h4>Expenses by Category</h4>
+                        <canvas id="expenses-category-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detailed Report -->
+        <div class="detailed-report">
+            <h4>Detailed Report</h4>
+            <div class="report-table-container">
+                <table class="report-table">
+                    <thead>
+                        <tr id="report-table-head">
+                            <!-- Dynamic headers -->
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Category Breakdown (for expenses report) -->
+        <div id="category-breakdown-section" class="category-breakdown">
+            <h4>Category Breakdown</h4>
+            <div id="category-breakdown">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+        
+        <!-- Report Insights -->
+        <div class="insights-panel">
+            <h3>Report Insights</h3>
+            <div id="report-insights">
+                <!-- Insights will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Export Options -->
+        <div class="export-options">
+            <h3>Export Options</h3>
+            <div class="export-buttons">
+                <button class="btn btn-outline" onclick="reportsManagement.exportPDF()">
+                    <i class="fas fa-file-pdf"></i> Download PDF
+                </button>
+                <button class="btn btn-outline" onclick="reportsManagement.exportExcel()">
+                    <i class="fas fa-file-excel"></i> Download Excel
+                </button>
+                <button class="btn btn-outline" onclick="reportsManagement.exportCSV()">
+                    <i class="fas fa-file-csv"></i> Download CSV
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
             <!-- Staff Management Section -->
 <div id="staff-page" class="page-content d-none">
@@ -2549,6 +3392,8 @@
     <script src="js/shortcuts.js"></script>
     <script src="js/purchases.js"></script>
     <script src="js/scroll.js"></script>
+    <script src="js/reports.js"></script>
+    <script src="js/expenses.js"></script>
 
     <script>
         // Initialize the application

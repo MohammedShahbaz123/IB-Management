@@ -1,0 +1,108 @@
+/* Purchases Page Specific Styles */
+.purchase-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    margin-bottom: 30px;
+}
+
+.purchase-order-container {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.order-meta-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.supplier-select-wrapper {
+    display: flex;
+    gap: 10px;
+}
+
+.purchase-items-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.purchase-items-table th {
+    background: #f8f9fa;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.purchase-items-table td {
+    padding: 12px;
+    border-bottom: 1px solid #e9ecef;
+    color: #495057;
+}
+
+.purchase-items-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+/* Purchase status badges */
+.status-ordered {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-received {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.status-cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Purchase preview specific */
+#purchase-preview-page .preview-header {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+#purchase-preview-page .preview-header .btn-outline {
+    border-color: white;
+    color: white;
+}
+
+#purchase-preview-page .preview-header .btn-outline:hover {
+    background: white;
+    color: #f5576c;
+}
+
+/* Responsive adjustments for purchases */
+@media (max-width: 768px) {
+    .purchase-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    .purchase-order-container {
+        padding: 20px;
+    }
+    
+    .item-form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .supplier-select-wrapper {
+        flex-direction: column;
+    }
+}

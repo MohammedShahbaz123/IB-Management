@@ -60,11 +60,6 @@ class KeyboardShortcuts {
             this.showHelp();
         });
         
-        // Dashboard page number shortcuts (still use numbers)
-        for (let i = 0; i <= 9; i++) {
-            this.register(`${i}`, `Go to page ${this.getPageName(i)}`, () => this.navigateToPage(i));
-        }
-        
         // Quick page navigation with Alt + first letter
         this.register('Alt+1', 'Go to Inventory', () => this.navigateTo('inventory'));
         this.register('Alt+2', 'Go to Parties', () => this.navigateTo('parties'));
@@ -159,12 +154,6 @@ class KeyboardShortcuts {
             console.log(`⌨️ Executing shortcut: ${keyCombination} - ${shortcut.description}`);
             shortcut.callback(event);
             return;
-        }
-        
-        // Check for number keys (without Alt) on dashboard
-        if (!event.ctrlKey && !event.metaKey && !event.altKey && /^[0-9]$/.test(event.key)) {
-            const pageIndex = parseInt(event.key);
-            this.navigateToPage(pageIndex);
         }
     }
     
@@ -395,21 +384,6 @@ class KeyboardShortcuts {
         const sidebarLink = document.querySelector(`.sidebar-menu a[data-page="${page}"]`);
         if (sidebarLink) {
             sidebarLink.click();
-        }
-    }
-    
-    navigateToPage(number) {
-        const pages = [
-            'overview', 'inventory', 'parties', 'sales', 
-            'purchases', 'expenses', 'reports', 'businesses', 
-            'staff', 'settings'
-        ];
-        
-        if (number >= 0 && number < pages.length) {
-            const page = pages[number];
-            this.navigateTo(page);
-        } else if (number === 0) {
-            this.navigateTo('settings');
         }
     }
     
@@ -658,10 +632,6 @@ class KeyboardShortcuts {
                                     <div class="shortcut-item">
                                         <span class="shortcut-key">Alt + 5</span>
                                         <span class="shortcut-description">Go to Expenses</span>
-                                    </div>
-                                    <div class="shortcut-item">
-                                        <span class="shortcut-key">0-9 Keys</span>
-                                        <span class="shortcut-description">Dashboard quick pages</span>
                                     </div>
                                 </div>
                             </div>
