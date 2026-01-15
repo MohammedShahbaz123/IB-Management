@@ -1707,31 +1707,155 @@ function clearAllSessionData() {
 
 async function checkUserBusinessesAndProfile() {
     try {
-        console.log('🔄 SIMPLE CHECK: Checking user setup...');
+        console.log('🔍 SMART CHECK: Checking user setup state...');
         
-        // ALWAYS show profile page for new users
-        if (isNewUser || !localStorage.getItem('profile_completed')) {
-            console.log('🆕 New user detected, showing profile form');
+        // 🔥 CRITICAL FIX: Check database FIRST, not localStorage
+        // Check if user has a profile in the database
+        const { data: existingProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, business_name')
+            .eq('id', currentUser.id)
+            .single();
+        
+        console.log('📋 Profile check result:', existingProfile ? 'FOUND' : 'NOT FOUND');
+        
+        // If NO profile exists in database → Show profile page (NEW USER)
+        if (profileError || !existingProfile) {
+            console.log('🆕 NEW USER: No profile in database, showing profile form');
             isCompletingProfile = true;
             showProfilePage();
+            
+            // Auto-fill email in form
+            setTimeout(() => {
+                const nameField = document.getElementById('full-name');
+                if (nameField && currentUser?.email) {
+                    const nameFromEmail = currentUser.email.split('@')[0];
+                    const capitalizedName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+                    nameField.value = capitalizedName;
+                    nameField.focus();
+                }
+            }, 100);
+            
             return;
         }
         
-        // For returning users, check if they have businesses
-        if (!localStorage.getItem('user_has_businesses')) {
-            console.log('🏢 No businesses found, showing create business');
+        // 🔥 USER HAS PROFILE → Check if they have businesses
+        console.log('✅ EXISTING USER: Profile found, checking businesses...');
+        
+        // Check for owned businesses
+        const { data: ownedBusinesses, error: businessError } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('owner_id', currentUser.id)
+            .eq('is_active', true);
+        
+        // Check for staff businesses
+        const staffBusinesses = await checkStaffMembership(currentUser.email);
+        
+        const totalBusinesses = [
+            ...(ownedBusinesses || []),
+            ...(staffBusinesses || [])
+        ];
+        
+        console.log('📊 Businesses found:', {
+            owned: ownedBusinesses?.length || 0,
+            staff: staffBusinesses?.length || 0,
+            total: totalBusinesses.length
+        });
+        
+        // If NO businesses → Show business creation
+        if (totalBusinesses.length === 0) {
+            console.log('🏢 No businesses found, showing business creation');
             showCreateBusinessOnboarding();
             return;
         }
         
-        // User has completed setup, show dashboard
-        console.log('✅ User setup complete, showing dashboard');
-        await showDashboard();
+        // 🔥 USER HAS BOTH PROFILE AND BUSINESSES → Go to dashboard
+        console.log('🚀 COMPLETE USER: Going to dashboard');
+        
+        // Save to userBusinesses
+        userBusinesses = totalBusinesses;
+        
+        // Set active business
+        if (totalBusinesses.length > 0) {
+            // Try to restore last active business
+            const storedBusiness = loadUserData('activeBusiness');
+            if (storedBusiness && totalBusinesses.some(b => b.id === storedBusiness.id)) {
+                currentBusiness = storedBusiness;
+            } else {
+                currentBusiness = totalBusinesses[0];
+                saveUserData('activeBusiness', currentBusiness);
+            }
+        }
+        
+        // Set completion flags
+        localStorage.setItem('profile_completed', 'true');
+        localStorage.setItem('user_has_businesses', 'true');
+        
+        // Short delay then show dashboard
+        setTimeout(async () => {
+            await showDashboard();
+            
+            // Load dashboard data
+            if (window.loadDashboardData) {
+                await loadDashboardData();
+            }
+        }, 300);
         
     } catch (error) {
         console.error('❌ Error in user check:', error);
-        // Default to profile setup on any error
+        
+        // On error, default to safest option: show profile page
         isCompletingProfile = true;
         showProfilePage();
+        
+        showNotification('Setup Issue', 'There was an error checking your account. Please complete your profile.', 'warning');
     }
 }
+
+// FAQ functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const faqItems = document.querySelectorAll('.faq-item');
+    
+    faqItems.forEach(item => {
+        const question = item.querySelector('.faq-question');
+        question.addEventListener('click', () => {
+            // Close other items
+            faqItems.forEach(otherItem => {
+                if (otherItem !== item && otherItem.classList.contains('active')) {
+                    otherItem.classList.remove('active');
+                }
+            });
+            
+            // Toggle current item
+            item.classList.toggle('active');
+        });
+    });
+    
+    // Contact form handling
+    const contactForm = document.getElementById('contact-form');
+    if (contactForm) {
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form data
+            const formData = {
+                name: document.getElementById('contact-name').value,
+                email: document.getElementById('contact-email').value,
+                company: document.getElementById('contact-company').value,
+                phone: document.getElementById('contact-phone').value,
+                subject: document.getElementById('contact-subject').value,
+                message: document.getElementById('contact-message').value
+            };
+            
+            // Here you would typically send this to your backend
+            console.log('Contact form submitted:', formData);
+            
+            // Show success message
+            showNotification('Thank you! Your message has been sent. We\'ll get back to you soon.', 'success');
+            
+            // Reset form
+            contactForm.reset();
+        });
+    }
+});
