@@ -10,18 +10,76 @@ const reportsManagement = {
     },
     
     charts: {},
+    isInitialized: false,
     
     init: function() {
+        if (this.isInitialized) return;
+        
+        console.log('📊 Initializing reports management...');
+        
         this.setupEventListeners();
-        this.loadDefaultReport();
         this.setupDateRange();
-        this.loadChartData();
+        this.initializeCharts();
+        
+        // Check if business is available
+        if (currentBusiness?.id) {
+            console.log('✅ Business already selected:', currentBusiness.name);
+            this.loadDefaultReport();
+        } else {
+            console.log('⚠️ No business selected yet');
+            this.showNoBusinessMessage();
+        }
+        
+        // Listen for business change events from navbar selector
+        window.addEventListener('businessChanged', () => {
+            if (currentBusiness?.id) {
+                console.log('✅ Business changed via navbar, loading reports for:', currentBusiness.name);
+                this.loadDefaultReport();
+            } else {
+                this.showNoBusinessMessage();
+            }
+        });
+        
+        this.isInitialized = true;
+    },
+    
+    showNoBusinessMessage: function() {
+        const reportTitle = document.getElementById('report-title');
+        const reportResults = document.querySelector('.report-results');
+        
+        if (reportTitle) {
+            reportTitle.textContent = 'Select a Business First';
+        }
+        
+        if (reportResults) {
+            reportResults.innerHTML = `
+                <div class="text-center" style="padding: 3rem; color: #6c757d;">
+                    <i class="fas fa-building fa-3x mb-3" style="opacity: 0.5;"></i>
+                    <h3>No Business Selected</h3>
+                    <p>Please select a business from the dropdown in the navigation bar to view reports.</p>
+                    <div class="mt-3">
+                        <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                            <p class="mb-2"><strong>How to select a business:</strong></p>
+                            <ol style="text-align: left; margin: 0 auto; max-width: 300px;">
+                                <li>Look for the business dropdown in the left sidebar</li>
+                                <li>Select your business from the list</li>
+                                <li>Reports will load automatically</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     },
     
     setupEventListeners: function() {
         // Report type selection
         document.querySelectorAll('.report-card').forEach(card => {
             card.addEventListener('click', (e) => {
+                if (!currentBusiness?.id) {
+                    showNotification('Please select a business first from the navigation', 'warning');
+                    return;
+                }
                 const reportType = e.currentTarget.dataset.type;
                 this.loadReport(reportType);
             });
@@ -29,6 +87,10 @@ const reportsManagement = {
         
         // Filter controls
         document.getElementById('report-type')?.addEventListener('change', (e) => {
+            if (!currentBusiness?.id) {
+                showNotification('Please select a business first from the navigation', 'warning');
+                return;
+            }
             this.currentFilters.type = e.target.value;
             this.loadReportData();
         });
@@ -59,7 +121,13 @@ const reportsManagement = {
         document.getElementById('print-report-btn')?.addEventListener('click', () => this.printReport());
         
         // Refresh button
-        document.getElementById('refresh-report-btn')?.addEventListener('click', () => this.loadReportData());
+        document.getElementById('refresh-report-btn')?.addEventListener('click', () => {
+            if (!currentBusiness?.id) {
+                showNotification('Please select a business first from the navigation', 'warning');
+                return;
+            }
+            this.loadReportData();
+        });
     },
     
     setupDateRange: function() {
@@ -142,10 +210,19 @@ const reportsManagement = {
     },
     
     loadDefaultReport: function() {
+        if (!currentBusiness?.id) {
+            this.showNoBusinessMessage();
+            return;
+        }
         this.loadReport('sales');
     },
     
     loadReport: function(reportType) {
+        if (!currentBusiness?.id) {
+            showNotification('Please select a business first from the navigation', 'warning');
+            return;
+        }
+        
         this.currentFilters.type = reportType;
         
         // Update active card
@@ -159,24 +236,43 @@ const reportsManagement = {
         }
         
         // Update UI
-        document.getElementById('report-type').value = reportType;
+        const reportTypeSelect = document.getElementById('report-type');
+        if (reportTypeSelect) {
+            reportTypeSelect.value = reportType;
+        }
         
         // Load report data
         this.loadReportData();
         
         // Update page title
+        this.updateReportTitle();
+    },
+    
+    updateReportTitle: function() {
         const reportTitle = document.getElementById('report-title');
-        if (reportTitle) {
-            const titles = {
-                sales: 'Sales Report',
-                expenses: 'Expenses Report',
-                inventory: 'Inventory Report',
-                profit: 'Profit & Loss Report',
-                cashflow: 'Cash Flow Report',
-                customers: 'Customer Report',
-                suppliers: 'Supplier Report'
-            };
-            reportTitle.textContent = titles[reportType] || 'Report';
+        if (!reportTitle) return;
+        
+        if (!currentBusiness?.id) {
+            reportTitle.textContent = 'Select a Business First';
+            return;
+        }
+        
+        const titles = {
+            sales: 'Sales Report',
+            expenses: 'Expenses Report',
+            inventory: 'Inventory Report',
+            profit: 'Profit & Loss Report',
+            cashflow: 'Cash Flow Report',
+            customers: 'Customer Report',
+            suppliers: 'Supplier Report'
+        };
+        
+        reportTitle.textContent = titles[this.currentFilters.type] || 'Business Reports';
+        
+        // Add business name to subtitle if you have one
+        const reportSubtitle = document.querySelector('.reports-header p');
+        if (reportSubtitle) {
+            reportSubtitle.textContent = `Showing data for ${currentBusiness.name}`;
         }
     },
     
@@ -184,18 +280,45 @@ const reportsManagement = {
         try {
             showLoading();
             
-             if (!window.currentBusiness) {
-            showNotification('Please select a business first', 'warning');
-            hideLoading();
-            return;
-        }
-        const currentBusiness = window.currentBusiness;
+            if (!currentBusiness?.id) {
+                showNotification('Please select a business first from the navigation', 'warning');
+                hideLoading();
+                return;
+            }
+            
+            console.log('📊 Loading report for business:', currentBusiness.name);
             
             // Get date range
-            const startDate = this.currentFilters.startDate || 
-                            new Date(document.getElementById('start-date').value);
-            const endDate = this.currentFilters.endDate || 
-                          new Date(document.getElementById('end-date').value);
+            let startDate, endDate;
+            
+            const startDateInput = document.getElementById('start-date')?.value;
+            const endDateInput = document.getElementById('end-date')?.value;
+            
+            if (startDateInput && endDateInput) {
+                // Parse dates from input fields
+                startDate = new Date(startDateInput + 'T00:00:00');
+                endDate = new Date(endDateInput + 'T23:59:59');
+            } else {
+                // Use default date range
+                startDate = this.currentFilters.startDate || new Date();
+                endDate = this.currentFilters.endDate || new Date();
+                
+                if (this.currentFilters.dateRange !== 'custom') {
+                    this.setDefaultDates();
+                    startDate = this.currentFilters.startDate;
+                    endDate = this.currentFilters.endDate;
+                }
+            }
+            
+            // Validate dates
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                throw new Error('Invalid date range selected');
+            }
+            
+            // Ensure end date is after start date
+            if (startDate > endDate) {
+                [startDate, endDate] = [endDate, startDate];
+            }
             
             // Load data based on report type
             switch(this.currentFilters.type) {
@@ -225,132 +348,179 @@ const reportsManagement = {
             this.updateReportMeta();
             
         } catch (error) {
+            console.error('Error loading report:', error);
             showNotification('Failed to load report: ' + error.message, 'error');
+            
+            // Show error in report results
+            const reportResults = document.querySelector('.report-results');
+            if (reportResults) {
+                reportResults.innerHTML = `
+                    <div class="text-center" style="padding: 2rem; color: #6c757d;">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                        <h4>Error Loading Report</h4>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary mt-2" onclick="reportsManagement.loadReportData()">
+                            <i class="fas fa-redo"></i> Try Again
+                        </button>
+                    </div>
+                `;
+            }
         } finally {
             hideLoading();
         }
     },
     
     loadSalesReport: async function(startDate, endDate) {
-    try {
-        // Get sales data
-        const { data: sales, error } = await supabase
-            .from('sales')
-            .select('*')
-            .eq('business_id', window.currentBusiness?.id)
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString())
-            .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        // Get customers separately if needed
-        const customerIds = [...new Set(sales?.map(sale => sale.customer_id).filter(id => id))];
-        let customers = {};
-        
-        if (customerIds.length > 0) {
-            const { data: customerData, error: customerError } = await supabase
-                .from('parties')
-                .select('id, name, email, phone')
-                .in('id', customerIds);
-            
-            if (!customerError && customerData) {
-                customerData.forEach(customer => {
-                    customers[customer.id] = customer;
-                });
+        try {
+            if (!currentBusiness?.id) {
+                throw new Error('No active business selected');
             }
-        }
-        
-        // Get sale items
-        const saleIds = sales?.map(sale => sale.id) || [];
-        let saleItems = [];
-        
-        if (saleIds.length > 0) {
-            const { data: itemsData, error: itemsError } = await supabase
-                .from('sale_items')
-                .select('*')
-                .in('sale_id', saleIds);
             
-            if (!itemsError && itemsData) {
-                saleItems = itemsData;
+            // Use business-aware data fetching
+            const sales = await getBusinessData('sales', {
+                filters: {},
+                orderBy: 'created_at',
+                ascending: false,
+                useCache: false
+            });
+            
+            // Filter by date range
+            const filteredSales = sales.filter(sale => {
+                const saleDate = new Date(sale.created_at);
+                return saleDate >= startDate && saleDate <= endDate;
+            });
+            
+            // Get customers for these sales
+            const customerIds = [...new Set(filteredSales.map(sale => sale.customer_id).filter(id => id))];
+            let customers = {};
+            
+            if (customerIds.length > 0) {
+                const { data: customerData, error: customerError } = await supabase
+                    .from('parties')
+                    .select('id, name, email, phone')
+                    .in('id', customerIds);
+                
+                if (!customerError && customerData) {
+                    customerData.forEach(customer => {
+                        customers[customer.id] = customer;
+                    });
+                }
             }
+            
+            // Get sale items
+            const saleIds = filteredSales.map(sale => sale.id) || [];
+            let saleItems = [];
+            
+            if (saleIds.length > 0) {
+                const { data: itemsData, error: itemsError } = await supabase
+                    .from('sale_items')
+                    .select('*')
+                    .in('sale_id', saleIds);
+                
+                if (!itemsError && itemsData) {
+                    saleItems = itemsData;
+                }
+            }
+            
+            // Combine data
+            const enhancedSales = filteredSales.map(sale => ({
+                ...sale,
+                customer: customers[sale.customer_id] || { name: 'Walk-in Customer' },
+                sale_items: saleItems.filter(item => item.sale_id === sale.id) || []
+            }));
+            
+            this.displaySalesReport(enhancedSales);
+            this.generateSalesCharts(enhancedSales);
+            
+        } catch (error) {
+            console.error('Error loading sales report:', error);
+            throw error;
         }
-        
-        // Combine data
-        const enhancedSales = sales?.map(sale => ({
-            ...sale,
-            customer: customers[sale.customer_id] || { name: 'Walk-in Customer' },
-            sale_items: saleItems.filter(item => item.sale_id === sale.id) || []
-        })) || [];
-        
-        this.displaySalesReport(enhancedSales);
-        this.generateSalesCharts(enhancedSales);
-        
-    } catch (error) {
-        console.error('Error loading sales report:', error);
-        throw error;
-    }
-},
+    },
     
     displaySalesReport: function(sales) {
-    const tableBody = document.getElementById('report-table-body');
-    if (!tableBody) return;
-    
-    tableBody.innerHTML = '';
-    
-    let totalAmount = 0;
-    let totalItems = 0;
-    
-    (sales || []).forEach(sale => {
-        const itemsCount = sale.sale_items?.length || 0;
-        const amount = parseFloat(sale.total_amount || 0);
+        const tableBody = document.getElementById('report-table-body');
+        if (!tableBody) return;
         
-        totalAmount += amount;
-        totalItems += itemsCount;
+        tableBody.innerHTML = '';
         
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${sale.invoice_number || 'N/A'}</td>
-            <td>${formatDate(sale.created_at)}</td>
-            <td>${sale.customer?.name || 'Walk-in Customer'}</td>
-            <td>${itemsCount}</td>
-            <td>${formatCurrency(amount)}</td>
-            <td>
-                <span class="status-badge ${sale.status || 'completed'}">
-                    ${(sale.status || 'completed').toUpperCase()}
-                </span>
-            </td>
-            <td>
-                <span class="payment-status ${sale.payment_status || 'paid'}">
-                    ${(sale.payment_status || 'paid').toUpperCase()}
-                </span>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-    
-    // Update summary
-    document.getElementById('report-summary-total').textContent = formatCurrency(totalAmount);
-    document.getElementById('report-summary-count').textContent = sales.length;
-    document.getElementById('report-summary-items').textContent = totalItems;
-    document.getElementById('report-summary-avg').textContent = formatCurrency(
-        sales.length > 0 ? totalAmount / sales.length : 0
-    );
-},
+        if (sales.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center" style="padding: 2rem; color: #6c757d;">
+                        <i class="fas fa-info-circle"></i> No sales data found for the selected period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let totalAmount = 0;
+        let totalItems = 0;
+        
+        sales.forEach(sale => {
+            const itemsCount = sale.sale_items?.length || 0;
+            const amount = parseFloat(sale.total_amount || 0);
+            
+            totalAmount += amount;
+            totalItems += itemsCount;
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${sale.invoice_number || 'N/A'}</td>
+                <td>${formatDate(sale.created_at)}</td>
+                <td>${sale.customer?.name || 'Walk-in Customer'}</td>
+                <td>${itemsCount}</td>
+                <td>${formatCurrency(amount)}</td>
+                <td>
+                    <span class="status-badge ${sale.status || 'completed'}">
+                        ${(sale.status || 'completed').toUpperCase()}
+                    </span>
+                </td>
+                <td>
+                    <span class="payment-status ${sale.payment_status || 'paid'}">
+                        ${(sale.payment_status || 'paid').toUpperCase()}
+                    </span>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+        
+        // Update summary
+        document.getElementById('report-summary-total').textContent = formatCurrency(totalAmount);
+        document.getElementById('report-summary-count').textContent = sales.length;
+        document.getElementById('report-summary-items').textContent = totalItems;
+        document.getElementById('report-summary-avg').textContent = formatCurrency(
+            sales.length > 0 ? totalAmount / sales.length : 0
+        );
+    },
     
     loadExpensesReport: async function(startDate, endDate) {
-        const { data: expenses, error } = await supabase
-            .from('expenses')
-            .select('*')
-            .eq('business_id', window.currentBusiness?.id)
-            .gte('date', startDate.toISOString())
-            .lte('date', endDate.toISOString())
-            .order('date', { ascending: false });
-        
-        if (error) throw error;
-        
-        this.displayExpensesReport(expenses || []);
-        this.generateExpensesCharts(expenses || []);
+        try {
+            if (!currentBusiness?.id) {
+                throw new Error('No active business selected');
+            }
+            
+            const expenses = await getBusinessData('expenses', {
+                filters: {},
+                orderBy: 'date',
+                ascending: false,
+                useCache: false
+            });
+            
+            // Filter by date range
+            const filteredExpenses = expenses.filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate >= startDate && expenseDate <= endDate;
+            });
+            
+            this.displayExpensesReport(filteredExpenses);
+            this.generateExpensesCharts(filteredExpenses);
+            
+        } catch (error) {
+            console.error('Error loading expenses report:', error);
+            throw error;
+        }
     },
     
     displayExpensesReport: function(expenses) {
@@ -358,6 +528,17 @@ const reportsManagement = {
         if (!tableBody) return;
         
         tableBody.innerHTML = '';
+        
+        if (expenses.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center" style="padding: 2rem; color: #6c757d;">
+                        <i class="fas fa-info-circle"></i> No expenses data found for the selected period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
         
         let totalAmount = 0;
         const categoryTotals = {};
@@ -404,6 +585,15 @@ const reportsManagement = {
         
         const total = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
         
+        if (total === 0) {
+            breakdownContainer.innerHTML = `
+                <div class="text-center" style="padding: 1rem; color: #6c757d;">
+                    <i class="fas fa-info-circle"></i> No category data available
+                </div>
+            `;
+            return;
+        }
+        
         breakdownContainer.innerHTML = Object.entries(categoryTotals)
             .sort(([,a], [,b]) => b - a)
             .map(([category, amount]) => {
@@ -422,33 +612,42 @@ const reportsManagement = {
     },
     
     loadInventoryReport: async function(startDate, endDate) {
-        const { data: products, error } = await supabase
-            .from('products')
-            .select('*')
-            .eq('business_id', window.currentBusiness?.id)
-            .order('name');
-        
-        if (error) throw error;
-        
-        // Get inventory movements
-        const { data: movements, error: movementsError } = await supabase
-            .from('inventory_movements')
-            .select('*')
-            .eq('business_id', window.currentBusiness?.id)
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString());
-        
-        if (movementsError) throw movementsError;
-        
-        this.displayInventoryReport(products || [], movements || []);
-        this.generateInventoryCharts(products || []);
+        try {
+            if (!currentBusiness?.id) {
+                throw new Error('No active business selected');
+            }
+            
+            const products = await getBusinessData('products', {
+                orderBy: 'name',
+                ascending: true,
+                useCache: false
+            });
+            
+            this.displayInventoryReport(products);
+            this.generateInventoryCharts(products);
+            
+        } catch (error) {
+            console.error('Error loading inventory report:', error);
+            throw error;
+        }
     },
     
-    displayInventoryReport: function(products, movements) {
+    displayInventoryReport: function(products) {
         const tableBody = document.getElementById('report-table-body');
         if (!tableBody) return;
         
         tableBody.innerHTML = '';
+        
+        if (products.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center" style="padding: 2rem; color: #6c757d;">
+                        <i class="fas fa-info-circle"></i> No inventory data found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
         
         let totalStockValue = 0;
         let lowStockCount = 0;
@@ -476,8 +675,8 @@ const reportsManagement = {
                 <td>${formatCurrency(stockValue)}</td>
                 <td>
                     <span class="stock-status ${product.current_stock <= 0 ? 'out-of-stock' : 
-                                           product.current_stock <= product.reorder_level ? 'low-stock' : 
-                                           'in-stock'}">
+                                               product.current_stock <= product.reorder_level ? 'low-stock' : 
+                                               'in-stock'}">
                         ${product.current_stock <= 0 ? 'Out of Stock' : 
                           product.current_stock <= product.reorder_level ? 'Low Stock' : 'In Stock'}
                     </span>
@@ -494,189 +693,50 @@ const reportsManagement = {
     },
     
     loadProfitLossReport: async function(startDate, endDate) {
-        // Get sales data
-        const { data: sales, error: salesError } = await supabase
-            .from('sales')
-            .select('total_amount')
-            .eq('business_id', window.currentBusiness?.id)
-            .eq('status', 'completed')
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString());
-        
-        if (salesError) throw salesError;
-        
-        // Get expenses data
-        const { data: expenses, error: expensesError } = await supabase
-            .from('expenses')
-            .select('amount')
-            .eq('business_id', window.currentBusiness?.id)
-            .eq('status', 'paid')
-            .gte('date', startDate.toISOString())
-            .lte('date', endDate.toISOString());
-        
-        if (expensesError) throw expensesError;
-        
-        const totalRevenue = sales?.reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0) || 0;
-        const totalExpenses = expenses?.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0) || 0;
-        const netProfit = totalRevenue - totalExpenses;
-        const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
-        
-        this.displayProfitLossReport(totalRevenue, totalExpenses, netProfit, profitMargin);
-        this.generateProfitLossCharts(totalRevenue, totalExpenses);
-    },
-    
-    displayProfitLossReport: function(revenue, expenses, profit, margin) {
-        const resultsContainer = document.getElementById('report-results-content');
-        if (!resultsContainer) return;
-        
-        resultsContainer.innerHTML = `
-            <div class="profit-loss-summary">
-                <div class="summary-grid">
-                    <div class="summary-card positive">
-                        <div class="value">${formatCurrency(revenue)}</div>
-                        <div class="label">Total Revenue</div>
-                    </div>
-                    <div class="summary-card negative">
-                        <div class="value">${formatCurrency(expenses)}</div>
-                        <div class="label">Total Expenses</div>
-                    </div>
-                    <div class="summary-card ${profit >= 0 ? 'positive' : 'negative'}">
-                        <div class="value">${formatCurrency(profit)}</div>
-                        <div class="label">Net Profit</div>
-                    </div>
-                    <div class="summary-card ${margin >= 0 ? 'positive' : 'negative'}">
-                        <div class="value">${margin.toFixed(1)}%</div>
-                        <div class="label">Profit Margin</div>
-                    </div>
-                </div>
-                
-                <div class="profit-loss-details">
-                    <h4>Details</h4>
-                    <table class="details-table">
-                        <tr>
-                            <td>Gross Revenue:</td>
-                            <td class="text-end">${formatCurrency(revenue)}</td>
-                        </tr>
-                        <tr>
-                            <td>Total Expenses:</td>
-                            <td class="text-end">${formatCurrency(expenses)}</td>
-                        </tr>
-                        <tr class="total-row">
-                            <td><strong>Net Profit:</strong></td>
-                            <td class="text-end"><strong>${formatCurrency(profit)}</strong></td>
-                        </tr>
-                        <tr>
-                            <td>Profit Margin:</td>
-                            <td class="text-end">${margin.toFixed(1)}%</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        `;
-    },
-    
-    loadCashFlowReport: async function(startDate, endDate) {
-        // This would combine sales, expenses, and other cash movements
-        // For now, we'll show a simplified version
-        this.displayCashFlowReport();
-    },
-    
-    loadCustomerReport: async function(startDate, endDate) {
-        const { data: customers, error } = await supabase
-            .from('parties')
-            .select(`
-                *,
-                sales!inner(
-                    total_amount,
-                    created_at
-                )
-            `)
-            .eq('business_id', window.currentBusiness?.id)
-            .eq('type', 'customer')
-            .gte('sales.created_at', startDate.toISOString())
-            .lte('sales.created_at', endDate.toISOString());
-        
-        if (error) throw error;
-        
-        this.displayCustomerReport(customers || []);
-    },
-    
-    displayCustomerReport: function(customers) {
-        const tableBody = document.getElementById('report-table-body');
-        if (!tableBody) return;
-        
-        tableBody.innerHTML = '';
-        
-        customers.forEach(customer => {
-            const totalPurchases = customer.sales?.reduce((sum, sale) => 
-                sum + parseFloat(sale.total_amount || 0), 0) || 0;
-            const purchaseCount = customer.sales?.length || 0;
-            const avgPurchase = purchaseCount > 0 ? totalPurchases / purchaseCount : 0;
+        try {
+            if (!currentBusiness?.id) {
+                throw new Error('No active business selected');
+            }
             
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${customer.name}</td>
-                <td>${customer.email || 'N/A'}</td>
-                <td>${customer.phone || 'N/A'}</td>
-                <td>${purchaseCount}</td>
-                <td>${formatCurrency(totalPurchases)}</td>
-                <td>${formatCurrency(avgPurchase)}</td>
-                <td>${customer.city || 'N/A'}</td>
-                <td>
-                    <span class="status-badge ${customer.status || 'active'}">
-                        ${(customer.status || 'active').toUpperCase()}
-                    </span>
-                </td>
-            `;
-            tableBody.appendChild(row);
-        });
-    },
-    
-    loadSupplierReport: async function(startDate, endDate) {
-        const { data: suppliers, error } = await supabase
-            .from('parties')
-            .select(`
-                *,
-                purchases!inner(
-                    total_amount,
-                    created_at
-                )
-            `)
-            .eq('business_id', window.currentBusiness?.id)
-            .eq('type', 'supplier')
-            .gte('purchases.created_at', startDate.toISOString())
-            .lte('purchases.created_at', endDate.toISOString());
-        
-        if (error) throw error;
-        
-        this.displaySupplierReport(suppliers || []);
-    },
-    
-    displaySupplierReport: function(suppliers) {
-        const tableBody = document.getElementById('report-table-body');
-        if (!tableBody) return;
-        
-        tableBody.innerHTML = '';
-        
-        suppliers.forEach(supplier => {
-            const totalPurchases = supplier.purchases?.reduce((sum, purchase) => 
-                sum + parseFloat(purchase.total_amount || 0), 0) || 0;
-            const purchaseCount = supplier.purchases?.length || 0;
-            const avgPurchase = purchaseCount > 0 ? totalPurchases / purchaseCount : 0;
+            // Get sales data
+            const sales = await getBusinessData('sales', {
+                filters: {
+                    status: 'completed'
+                },
+                useCache: false
+            });
             
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${supplier.name}</td>
-                <td>${supplier.company || 'N/A'}</td>
-                <td>${supplier.email || 'N/A'}</td>
-                <td>${supplier.phone || 'N/A'}</td>
-                <td>${purchaseCount}</td>
-                <td>${formatCurrency(totalPurchases)}</td>
-                <td>${formatCurrency(avgPurchase)}</td>
-                <td>${supplier.city || 'N/A'}</td>
-            `;
-            tableBody.appendChild(row);
-        });
+            // Get expenses data
+            const expenses = await getBusinessData('expenses', {
+                filters: {
+                    status: 'paid'
+                },
+                useCache: false
+            });
+            
+            // Filter by date range
+            const filteredSales = sales.filter(sale => {
+                const saleDate = new Date(sale.created_at);
+                return saleDate >= startDate && saleDate <= endDate;
+            });
+            
+            const filteredExpenses = expenses.filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate >= startDate && expenseDate <= endDate;
+            });
+            
+            const totalRevenue = filteredSales.reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0) || 0;
+            const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0) || 0;
+            const netProfit = totalRevenue - totalExpenses;
+            const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+            
+            this.displayProfitLossReport(totalRevenue, totalExpenses, netProfit, profitMargin);
+            this.generateProfitLossCharts(totalRevenue, totalExpenses);
+            
+        } catch (error) {
+            console.error('Error loading profit/loss report:', error);
+            throw error;
+        }
     },
     
     updateReportMeta: function() {
@@ -692,14 +752,6 @@ const reportsManagement = {
         if (generatedElement) {
             generatedElement.textContent = formatDate(new Date(), 'full');
         }
-    },
-    
-    loadChartData: function() {
-        // Initialize charts
-        this.initializeCharts();
-        
-        // Load chart data based on report type
-        // This would typically fetch data and update charts
     },
     
     initializeCharts: function() {
@@ -838,14 +890,27 @@ const reportsManagement = {
     },
     
     exportPDF: function() {
+        if (!currentBusiness?.id) {
+            showNotification('Please select a business first from the navigation', 'warning');
+            return;
+        }
         showNotification('PDF export feature coming soon!', 'info');
     },
     
     exportExcel: function() {
+        if (!currentBusiness?.id) {
+            showNotification('Please select a business first from the navigation', 'warning');
+            return;
+        }
         showNotification('Excel export feature coming soon!', 'info');
     },
     
     exportCSV: function() {
+        if (!currentBusiness?.id) {
+            showNotification('Please select a business first from the navigation', 'warning');
+            return;
+        }
+        
         const table = document.getElementById('report-table-body');
         if (!table || table.children.length === 0) {
             showNotification('No data to export', 'warning');
@@ -894,10 +959,16 @@ const reportsManagement = {
     },
     
     printReport: function() {
+        if (!currentBusiness?.id) {
+            showNotification('Please select a business first from the navigation', 'warning');
+            return;
+        }
         window.print();
     },
     
     getInsights: function() {
+        if (!currentBusiness?.id) return;
+        
         // Generate insights based on report data
         const insights = [
             {
@@ -937,8 +1008,31 @@ const reportsManagement = {
 // Initialize reports management when page loads
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('reports-page')) {
-        reportsManagement.init();
+        console.log('📊 Reports page detected, initializing...');
+        
+        // Wait a bit for business management to initialize
+        setTimeout(() => {
+            reportsManagement.init();
+        }, 1000);
     }
 });
 
-
+// Also listen for when reports page is shown
+window.addEventListener('dashboardPageChanged', function(e) {
+    if (e.detail.page === 'reports') {
+        console.log('📊 Reports page shown, checking business...');
+        
+        // Update title based on current business
+        reportsManagement.updateReportTitle();
+        
+        if (currentBusiness?.id && !reportsManagement.isInitialized) {
+            console.log('✅ Business available, initializing reports...');
+            setTimeout(() => {
+                reportsManagement.init();
+            }, 500);
+        } else if (!currentBusiness?.id) {
+            console.log('⚠️ No business selected, showing message...');
+            reportsManagement.showNoBusinessMessage();
+        }
+    }
+});

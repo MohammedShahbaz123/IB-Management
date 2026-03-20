@@ -123,8 +123,25 @@ async function showDashboardPage(page) {
         // Update active menu item
         updateActiveNavigation(page);
         
-        // Force re-initialize page content (don't use cache for business switching)
-        await forceInitializePageContent(page);
+        // Initialize specific page if needed
+        if (page === 'settings') {
+            // Give it a moment to render, then initialize
+            setTimeout(() => {
+                if (typeof initializeSettingsPage === 'function') {
+                    initializeSettingsPage();
+                }
+            }, 100);
+        } else {
+            // Force re-initialize page content for other pages
+            await forceInitializePageContent(page);
+        }
+
+        if (page === 'businesses') {
+        // Initialize business management page
+        if (window.initializeBusinessManagementPage) {
+            await initializeBusinessManagementPage();
+        }
+    }
         
         console.log('✅ Dashboard page shown:', page, 'for business:', currentBusiness?.name);
         
@@ -3399,49 +3416,175 @@ async function loadFinancialSummary() {
     }
     
     try {
-        // Check if caching functions exist
-        if (typeof loadBusinessData === 'function') {
-            const cached = loadBusinessData('financial_summary');
-            if (cached) {
-                console.log('📊 Using cached financial summary for business:', currentBusiness.name);
-                updateFinancialUI(cached);
-                return;
-            }
+        console.log('💰 Loading financial summary for business:', currentBusiness.name);
+        
+        // Get the selected period from the dropdown
+        const periodSelect = document.getElementById('period-select');
+        const period = periodSelect ? periodSelect.value : 'month';
+        
+        // Calculate date range based on period
+        const now = new Date();
+        let startDate = new Date();
+        
+        switch(period) {
+            case 'today':
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            case 'week':
+                startDate.setDate(now.getDate() - 7);
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            case 'month':
+                startDate.setMonth(now.getMonth() - 1);
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            case 'quarter':
+                startDate.setMonth(now.getMonth() - 3);
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            case 'year':
+                startDate.setFullYear(now.getFullYear() - 1);
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            default:
+                startDate.setMonth(now.getMonth() - 1); // Default to month
+                startDate.setHours(0, 0, 0, 0);
         }
         
-        // 🔥 FIX: Remove is_active filter since column doesn't exist
-        const { data: sales, error } = await supabase
+        const endDate = new Date();
+        
+        console.log(`📅 Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+        
+        // Load sales data for the period
+        const { data: sales, error: salesError } = await supabase
             .from('sales')
-            .select('*')
+            .select('total_amount, status, created_at')
             .eq('business_id', currentBusiness.id)
-            // REMOVED: .eq('is_active', true) - this column doesn't exist
-            .order('created_at', { ascending: false }); // Add ordering if needed
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString());
         
-        if (error) throw error;
-        
-        const summary = {
-            totalSales: sales ? sales.length : 0,
-            totalRevenue: sales ? sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) : 0,
-            pendingInvoices: sales ? sales.filter(sale => sale.status === 'pending').length : 0,
-            avgSaleValue: sales && sales.length > 0 ? sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) / sales.length : 0
-        };
-        
-        // Cache the result if saveBusinessData exists
-        if (typeof saveBusinessData === 'function') {
-            saveBusinessData('financial_summary', summary);
+        if (salesError) {
+            console.error('❌ Error loading sales:', salesError);
+            throw salesError;
         }
         
-        updateFinancialUI(summary);
+        // Load expenses data for the period
+        const { data: expenses, error: expensesError } = await supabase
+            .from('expenses')
+            .select('amount, status, created_at')
+            .eq('business_id', currentBusiness.id)
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString());
+        
+        if (expensesError) {
+            console.error('❌ Error loading expenses:', expensesError);
+            // Don't throw, just log - expenses table might not exist
+        }
+        
+        // Calculate totals
+        const totalRevenue = sales ? sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) : 0;
+        const totalExpenses = expenses ? expenses.reduce((sum, expense) => sum + (expense.amount || 0), 0) : 0;
+        const netProfit = totalRevenue - totalExpenses;
+        const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+        
+        console.log(`📊 Financial Summary: Revenue: ${totalRevenue}, Expenses: ${totalExpenses}, Profit: ${netProfit}`);
+        
+        // Update UI
+        const revenueElement = document.getElementById('total-revenue');
+        const expensesElement = document.getElementById('total-expenses');
+        const profitElement = document.getElementById('net-profit');
+        const marginElement = document.getElementById('profit-margin');
+        
+        if (revenueElement) {
+            revenueElement.textContent = formatCurrency(totalRevenue);
+            revenueElement.className = totalRevenue >= 0 ? 'financial-positive' : 'financial-negative';
+        }
+        
+        if (expensesElement) {
+            expensesElement.textContent = formatCurrency(totalExpenses);
+            expensesElement.className = 'financial-negative';
+        }
+        
+        if (profitElement) {
+            profitElement.textContent = formatCurrency(netProfit);
+            profitElement.className = netProfit >= 0 ? 'financial-positive' : 'financial-negative';
+        }
+        
+        if (marginElement) {
+            marginElement.textContent = profitMargin.toFixed(1) + '%';
+            marginElement.className = profitMargin >= 0 ? 'financial-positive' : 'financial-negative';
+        }
+        
+        // Also update the dashboard stats (today's sales, today's revenue)
+        await updateDashboardStats();
+        
+        return { totalRevenue, totalExpenses, netProfit, profitMargin };
         
     } catch (error) {
         console.error('❌ Financial summary error:', error);
+        
         // Set default values on error
-        updateFinancialUI({
-            totalSales: 0,
-            totalRevenue: 0,
-            pendingInvoices: 0,
-            avgSaleValue: 0
-        });
+        const revenueElement = document.getElementById('total-revenue');
+        const expensesElement = document.getElementById('total-expenses');
+        const profitElement = document.getElementById('net-profit');
+        const marginElement = document.getElementById('profit-margin');
+        
+        if (revenueElement) revenueElement.textContent = formatCurrency(0);
+        if (expensesElement) expensesElement.textContent = formatCurrency(0);
+        if (profitElement) profitElement.textContent = formatCurrency(0);
+        if (marginElement) marginElement.textContent = '0%';
+        
+        return { totalRevenue: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0 };
+    }
+}
+
+async function updateDashboardStats() {
+    if (!currentBusiness?.id) return;
+    
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Get today's sales
+        const { data: todaySales, error: salesError } = await supabase
+            .from('sales')
+            .select('total_amount')
+            .eq('business_id', currentBusiness.id)
+            .gte('created_at', today.toISOString())
+            .lt('created_at', tomorrow.toISOString());
+        
+        if (!salesError && todaySales) {
+            const todaySalesCount = todaySales.length;
+            const todayRevenue = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+            
+            const todaySalesElement = document.getElementById('today-sales');
+            const todayRevenueElement = document.getElementById('today-revenue');
+            
+            if (todaySalesElement) todaySalesElement.textContent = todaySalesCount;
+            if (todayRevenueElement) todayRevenueElement.textContent = formatCurrency(todayRevenue);
+        }
+        
+        // Get low stock count
+        await updateDashboardLowStockCount();
+        
+        // Get pending orders count (sales with status 'pending')
+        const { data: pendingSales, error: pendingError } = await supabase
+            .from('sales')
+            .select('id')
+            .eq('business_id', currentBusiness.id)
+            .eq('status', 'pending');
+        
+        if (!pendingError) {
+            const pendingOrdersElement = document.getElementById('pending-orders');
+            if (pendingOrdersElement) {
+                pendingOrdersElement.textContent = pendingSales ? pendingSales.length : 0;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error updating dashboard stats:', error);
     }
 }
 

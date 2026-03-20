@@ -1,6 +1,21 @@
 let isCompletingProfile = false;
 let isCreatingBusiness = false;
 
+// Add this function at the top of your auth.js file, after your variable declarations
+async function getCurrentUser() {
+    try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        return data.user;
+    } catch (error) {
+        console.error('Error getting current user:', error);
+        return null;
+    }
+}
+
+// Make it globally available
+window.getCurrentUser = getCurrentUser;
+
 // Authentication Functions
 async function initializeApp() {
     if (appInitialized) {
@@ -673,29 +688,80 @@ async function handleOtpVerification(e) {
         console.log('🎉 OTP verified successfully:', data);
         
         currentUser = data.user;
-        console.log('👤 User after OTP verification:', currentUser);
+        console.log('👤 User after OTP verification:', {
+            id: currentUser.id,
+            email: currentUser.email
+        });
         
-        // Set flag to prevent auth state change interference
-        isCompletingProfile = true;
+        // 🔥 CRITICAL: Wait for session to propagate
+        console.log('⏳ Waiting for session to establish...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Check if this user is a staff member
-        const staffBusinesses = await checkStaffMembership(currentEmail);
+        // 🔥 CRITICAL: Check staff membership with retry logic
+        let staffBusinesses = [];
+        let retryCount = 0;
+        const maxRetries = 3;
         
-        if (staffBusinesses.length > 0) {
-            // This is a staff member
-            console.log('👥 Staff member authenticated, setting up session...');
-            await handleStaffMemberPostLogin(staffBusinesses);
-        } else {
-            // This is a regular user
-            console.log('👤 Regular user, checking profile completion...');
-            await checkUserBusinessesAndProfile();
+        while (retryCount < maxRetries) {
+            console.log(`🔍 Staff check attempt ${retryCount + 1}/${maxRetries}...`);
+            
+            staffBusinesses = await checkStaffMembership(currentUser.email);
+            
+            if (staffBusinesses && staffBusinesses.length > 0) {
+                console.log('✅ Staff found on attempt', retryCount + 1);
+                break;
+            }
+            
+            retryCount++;
+            if (retryCount < maxRetries) {
+                console.log(`⏳ Retrying in 1 second...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
         
-        showNotification('Success', 'Successfully authenticated!', 'success');
+        if (staffBusinesses && staffBusinesses.length > 0) {
+            console.log('👥 STAFF MEMBER DETECTED - bypassing all flows');
+            
+            // Set staff properties
+            currentUser.is_staff = true;
+            currentUser.user_type = 'staff';
+            currentUser.role = staffBusinesses[0].staff_role;
+            
+            // Set businesses
+            userBusinesses = staffBusinesses;
+            currentBusiness = staffBusinesses[0];
+            
+            // Save staff session
+            saveStaffSessionData(staffBusinesses);
+            
+            // Set flags
+            localStorage.setItem('profile_completed', 'true');
+            localStorage.setItem('user_has_businesses', 'true');
+            
+            // Reset flags
+            isCompletingProfile = false;
+            isCreatingBusiness = false;
+            
+            showNotification('Success', `Welcome ${staffBusinesses[0].staff_name || 'Staff Member'}!`, 'success');
+            
+            // Clear any pending state
+            clearAuthForms();
+            
+            // Go directly to dashboard
+            setTimeout(async () => {
+                await showDashboard();
+            }, 500);
+            
+            return;
+        }
+        
+        // Regular user flow - only if no staff found after all retries
+        console.log('👤 No staff found after', maxRetries, 'attempts, checking profile...');
+        await checkUserBusinessesAndProfile();
         
     } catch (error) {
         console.error('❌ OTP verification error:', error);
-        showNotification('Verification Failed', 'Invalid OTP code.', 'error');
+        showNotification('Verification Failed', error.message || 'Invalid OTP code.', 'error');
     } finally {
         setLoadingState(otpText, otpLoading, otpSubmit, false);
     }
@@ -1011,54 +1077,66 @@ async function checkStaffMembership(email) {
     try {
         console.log('🔍 Checking staff membership for:', email);
         
-        // Check staff_roles table for active staff memberships
-        const { data: staffRoles, error } = await supabase
-            .from('staff_roles')
-            .select('id, business_id, role, staff_name, email, owner_id, is_active, status')
-            .eq('email', email.toLowerCase())
-            .eq('is_active', true)
-            .eq('status', 'active');
-
-        if (error) {
-            console.error('❌ Error checking staff membership:', error);
+        // Get fresh session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session) {
+            console.log('❌ No valid session yet');
             return [];
         }
-
-        console.log('📊 Staff roles found:', staffRoles);
-
-        if (staffRoles && staffRoles.length > 0) {
-            // Get business details for each staff role
-            const businessIds = staffRoles.map(role => role.business_id);
-            const { data: businesses, error: businessError } = await supabase
-                .from('businesses')
-                .select('*')
-                .in('id', businessIds)
-                .eq('is_active', true);
-
-            if (businessError) {
-                console.error('❌ Error loading businesses for staff:', businessError);
-                return [];
-            }
-
-            // Combine staff roles with business data
-            const staffBusinesses = staffRoles.map(role => {
-                const business = businesses.find(b => b.id === role.business_id);
-                return business ? {
-                    ...business,
-                    access_type: 'staff',
-                    staff_role: role.role,
-                    staff_name: role.staff_name,
-                    staff_email: role.email,
-                    staff_role_id: role.id,
-                    added_by_owner_id: role.owner_id
-                } : null;
-            }).filter(business => business !== null);
-
-            console.log('✅ Staff businesses found:', staffBusinesses.length);
-            return staffBusinesses;
+        
+        const userId = session.user.id;
+        console.log('🔑 Session user ID:', userId);
+        
+        // 🔥 DIRECT QUERY WITHOUT ANY JOINS FIRST
+        const { data: staffRole, error: staffError } = await supabase
+            .from('staff_roles')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .eq('status', 'active')
+            .maybeSingle();
+        
+        console.log('📊 Staff role query result:', staffRole);
+        
+        if (staffError) {
+            console.error('❌ Staff role error:', staffError);
+            return [];
         }
-
-        return [];
+        
+        if (!staffRole) {
+            console.log('❌ No staff role found for user_id:', userId);
+            return [];
+        }
+        
+        // Now get the business
+        const { data: business, error: businessError } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('id', staffRole.business_id)
+            .eq('is_active', true)
+            .single();
+        
+        if (businessError || !business) {
+            console.error('❌ Business error:', businessError);
+            return [];
+        }
+        
+        console.log('✅ Staff member verified:', {
+            name: staffRole.staff_name,
+            role: staffRole.role,
+            business: business.name
+        });
+        
+        return [{
+            ...business,
+            access_type: 'staff',
+            staff_role: staffRole.role,
+            staff_name: staffRole.staff_name,
+            staff_email: staffRole.email,
+            staff_role_id: staffRole.id,
+            added_by_owner_id: staffRole.owner_id
+        }];
         
     } catch (error) {
         console.error('❌ Error in checkStaffMembership:', error);
@@ -1709,7 +1787,72 @@ async function checkUserBusinessesAndProfile() {
     try {
         console.log('🔍 SMART CHECK: Checking user setup state...');
         
-        // 🔥 CRITICAL FIX: Check database FIRST, not localStorage
+        // 🔥 CRITICAL FIX: FIRST check if this user is a staff member
+        // This must happen BEFORE any profile/business checks
+        const staffBusinesses = await checkStaffMembership(currentUser.email);
+        const isStaff = staffBusinesses && staffBusinesses.length > 0;
+        
+        if (isStaff) {
+            console.log('👥 STAFF USER DETECTED! Bypassing all profile/business checks...');
+            
+            // Set staff properties
+            currentUser.is_staff = true;
+            currentUser.user_type = 'staff';
+            
+            // Load the staff role from the staff_businesses data
+            if (staffBusinesses.length > 0) {
+                currentUser.role = staffBusinesses[0].staff_role || 'viewer';
+                console.log('🎯 Staff role set to:', currentUser.role);
+            }
+            
+            // Set user businesses to staff businesses
+            userBusinesses = staffBusinesses;
+            
+            // Set active business
+            if (staffBusinesses.length > 0) {
+                // Try to restore last active business from session
+                const storedBusiness = loadUserData('activeBusiness');
+                if (storedBusiness && staffBusinesses.some(b => b.id === storedBusiness.id)) {
+                    currentBusiness = storedBusiness;
+                } else {
+                    currentBusiness = staffBusinesses[0];
+                    saveUserData('activeBusiness', currentBusiness);
+                }
+                console.log('🏢 Active business set to:', currentBusiness.name);
+            }
+            
+            // 🔥 CRITICAL: Load the user role immediately
+            await loadCurrentUserRole();
+            
+            // Save staff session data
+            saveStaffSessionData(staffBusinesses);
+            
+            // Set flags to prevent profile/business creation
+            localStorage.setItem('profile_completed', 'true');
+            localStorage.setItem('user_has_businesses', 'true');
+            
+            // Reset any profile completion flags
+            isCompletingProfile = false;
+            isCreatingBusiness = false;
+            
+            console.log('🚀 Staff user ready - going straight to dashboard');
+            
+            // Short delay then show dashboard
+            setTimeout(async () => {
+                await showDashboard();
+                
+                // Load dashboard data
+                if (window.loadDashboardData) {
+                    await loadDashboardData();
+                }
+            }, 300);
+            
+            return; // 🔥 IMPORTANT: Exit early - don't do any other checks
+        }
+        
+        // 🔥 REGULAR USER FLOW (business owners) - Only runs if NOT staff
+        console.log('👤 REGULAR USER - checking profile and businesses...');
+        
         // Check if user has a profile in the database
         const { data: existingProfile, error: profileError } = await supabase
             .from('profiles')
@@ -1739,7 +1882,7 @@ async function checkUserBusinessesAndProfile() {
             return;
         }
         
-        // 🔥 USER HAS PROFILE → Check if they have businesses
+        // USER HAS PROFILE → Check if they have businesses
         console.log('✅ EXISTING USER: Profile found, checking businesses...');
         
         // Check for owned businesses
@@ -1749,17 +1892,12 @@ async function checkUserBusinessesAndProfile() {
             .eq('owner_id', currentUser.id)
             .eq('is_active', true);
         
-        // Check for staff businesses
-        const staffBusinesses = await checkStaffMembership(currentUser.email);
-        
         const totalBusinesses = [
-            ...(ownedBusinesses || []),
-            ...(staffBusinesses || [])
+            ...(ownedBusinesses || [])
         ];
         
         console.log('📊 Businesses found:', {
             owned: ownedBusinesses?.length || 0,
-            staff: staffBusinesses?.length || 0,
             total: totalBusinesses.length
         });
         
@@ -1770,7 +1908,7 @@ async function checkUserBusinessesAndProfile() {
             return;
         }
         
-        // 🔥 USER HAS BOTH PROFILE AND BUSINESSES → Go to dashboard
+        // USER HAS BOTH PROFILE AND BUSINESSES → Go to dashboard
         console.log('🚀 COMPLETE USER: Going to dashboard');
         
         // Save to userBusinesses
@@ -1778,7 +1916,6 @@ async function checkUserBusinessesAndProfile() {
         
         // Set active business
         if (totalBusinesses.length > 0) {
-            // Try to restore last active business
             const storedBusiness = loadUserData('activeBusiness');
             if (storedBusiness && totalBusinesses.some(b => b.id === storedBusiness.id)) {
                 currentBusiness = storedBusiness;
@@ -1796,7 +1933,6 @@ async function checkUserBusinessesAndProfile() {
         setTimeout(async () => {
             await showDashboard();
             
-            // Load dashboard data
             if (window.loadDashboardData) {
                 await loadDashboardData();
             }
@@ -1805,10 +1941,29 @@ async function checkUserBusinessesAndProfile() {
     } catch (error) {
         console.error('❌ Error in user check:', error);
         
-        // On error, default to safest option: show profile page
+        // On error, check if it's a staff user as fallback
+        try {
+            const staffBusinesses = await checkStaffMembership(currentUser?.email);
+            if (staffBusinesses && staffBusinesses.length > 0) {
+                console.log('👥 Fallback: Staff user detected after error');
+                currentUser.is_staff = true;
+                currentUser.user_type = 'staff';
+                currentUser.role = staffBusinesses[0].staff_role || 'viewer';
+                userBusinesses = staffBusinesses;
+                currentBusiness = staffBusinesses[0];
+                
+                setTimeout(async () => {
+                    await showDashboard();
+                }, 300);
+                return;
+            }
+        } catch (fallbackError) {
+            console.error('❌ Fallback also failed:', fallbackError);
+        }
+        
+        // Default to safest option
         isCompletingProfile = true;
         showProfilePage();
-        
         showNotification('Setup Issue', 'There was an error checking your account. Please complete your profile.', 'warning');
     }
 }

@@ -635,7 +635,7 @@ loadDefaultCategoriesForModal() {
                 <tr class="expense-row" data-expense-id="${expense.id}">
                     <td>
                         <div class="expense-description">${expense.description}</div>
-                        ${expense.notes ? `<small class="text-muted">${expense.notes.substring(0, 50)}${expense.notes.length > 50 ? '...' : ''}</small>` : ''}
+                        ${expense.notes ? `<small class="text-muted">${expense.notes.substring(0, 30)}${expense.notes.length > 30 ? '...' : ''}</small>` : ''}
                     </td>
                     <td>${formattedDate}</td>
                     <td>

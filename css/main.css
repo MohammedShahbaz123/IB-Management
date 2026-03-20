@@ -34,48 +34,48 @@ body {
 }
 
 /* ===== CRITICAL CSS FOR INITIAL RENDER ===== */
+body:not(.app-loaded) {
+    overflow: hidden;
+}
+
+#app-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    display: flex !important; /* ADD !important */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+body.app-loaded #app-loading {
+    display: none !important; /* ADD !important */
+}
+
+/* Initially hide all main pages */
 #landing-page,
 #auth-pages,
 #dashboard {
     display: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
 }
 
 body.app-loaded #landing-page,
 body.app-loaded #auth-pages,
 body.app-loaded #dashboard {
+    opacity: 1;
+}
+
+/* Show active page */
+#landing-page.active,
+#auth-pages.active,
+#dashboard.active {
     display: block;
-}
-
-.page-content {
-    display: none;
-}
-
-.page-content:not(.d-none) {
-    display: block;
-}
-
-body:not(.app-loaded) {
-    visibility: hidden;
-}
-
-body.app-loaded {
-    visibility: visible;
-}
-
-body:not(.app-loaded) > div {
-    opacity: 0;
-    visibility: hidden;
-}
-
-body.app-loaded > div {
-    transition: opacity 0.3s ease;
-}
-
-#landing-page,
-#auth-pages,
-#dashboard {
-    position: relative;
-    z-index: 1;
 }
 
 /* Loading spinner for initial app load */
@@ -85,33 +85,28 @@ body.app-loaded > div {
     left: 0;
     width: 100%;
     height: 100%;
-    background: #f5f7fb;
-    display: flex;
+    background: white;
+    display: flex !important; /* ADD !important */
     flex-direction: column;
-    align-items: center;
     justify-content: center;
-    z-index: 9999;
-    transition: opacity 0.3s ease;
-}
-
-#app-loading.hidden {
-    opacity: 0;
-    pointer-events: none;
+    align-items: center;
+    z-index: 9999; /* Increase z-index */
 }
 
 .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #e9ecef;
-    border-top: 4px solid #4361ee;
+    width: 50px;
+    height: 50px;
+    border: 3px solid #e9ecef;
+    border-top-color: var(--primary); /* Use your variable */
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
 }
 
 .loading-text {
-    color: #6c757d;
-    font-size: 1rem;
+    margin-top: 1rem;
+    font-size: 1.125rem;
+    color: var(--gray); /* Use your variable */
+    font-weight: 500;
 }
 
 @keyframes spin {
@@ -152,21 +147,37 @@ header {
 .nav-links {
     display: flex;
     list-style: none;
-}
-
-.nav-links li {
-    margin-left: 2rem;
+    gap: 2rem;
 }
 
 .nav-links a {
-    text-decoration: none;
     color: var(--dark);
     font-weight: 500;
-    transition: var(--transition);
+    padding: 0.5rem 0;
+    position: relative;
+}
+
+.nav-links li a{
+    text-decoration: none;
 }
 
 .nav-links a:hover {
     color: var(--primary);
+}
+
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background-color: var(--primary);
+    transition: width  0.3s ease;
+}
+
+.nav-links a:hover::after {
+    width: 100%;
 }
 
 .auth-buttons {
@@ -187,6 +198,15 @@ header {
     justify-content: center;
     gap: 0.5rem;
     text-align: center;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn:active {
+    transform: translateY(0);
 }
 
 .btn-outline {
@@ -583,20 +603,6 @@ header {
     .mobile-menu-btn {
         display: block;
     }
-}
-
-/* Emergency visibility overrides */
-#landing-page:not(.d-none),
-#auth-pages:not(.d-none),
-#dashboard:not(.d-none) {
-    display: block !important;
-    min-height: 100vh !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-
-body > div {
-    min-height: 100vh;
 }
 
 /* Shortcut indicators */
